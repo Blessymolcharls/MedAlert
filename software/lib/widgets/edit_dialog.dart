@@ -75,7 +75,7 @@ class _EditDialogState extends State<EditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Edit \${widget.compartment.slotName}'),
+      title: Text('Edit ${widget.compartment.slotName}'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,

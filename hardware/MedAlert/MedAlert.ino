@@ -8,7 +8,7 @@
 #include <time.h>
 
 const char *ssid = "1234";
-const char *password = "87654321 ";
+const char *password = "87654321";
 
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 19800; // +05:30 default
@@ -45,7 +45,7 @@ int activeLedRow = -1;
 int activeLedCol = -1;
 unsigned long buzzerStartTime = 0;
 bool buzzerActive = false;
-const unsigned long buzzerDuration = 10000;
+const unsigned long buzzerDuration = 2000;
 
 int testLedRow = -1;
 int testLedCol = -1;
@@ -71,6 +71,7 @@ class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
     deviceConnected = true;
     printEvent("BLE connected");
+    Serial.println("ESP32 CONNECTED");
   };
 
   void onDisconnect(BLEServer *pServer) {
@@ -167,6 +168,28 @@ void handleBLECommand(String cmd) {
   } else if (command == "GET_ALL") {
     printEvent("GET_ALL command received. Sending full schedule...");
     sendDataOverBLE();
+  } else if (command == "TRIGGER") {
+    int r = doc["r"].as<int>();
+    int c = doc["c"].as<int>();
+    if (r >= 0 && r < 3 && c >= 0 && c < 6) {
+      activeLedRow = r;
+      activeLedCol = c;
+      turnOnLed(r, c);
+      buzzerStartTime = millis();
+      buzzerActive = true;
+      beepBuzzer(true);
+      printEvent("TRIGGER command received. Row: " + String(r) +
+                 " Col: " + String(c));
+    }
+  } else if (command == "STOP") {
+    if (buzzerActive) {
+      buzzerActive = false;
+      beepBuzzer(false);
+    }
+    turnOffLed();
+    activeLedRow = -1;
+    activeLedCol = -1;
+    printEvent("STOP command received. LED and Buzzer turned off.");
   }
 }
 
@@ -279,6 +302,10 @@ void parseSerialCommand() {
       testLedActive = true;
 
       turnOnLed(r, c);
+      buzzerStartTime = millis();
+      buzzerActive = true;
+      beepBuzzer(true);
+
       printEvent("Test command via Serial -> Row: " + String(r) +
                  " Col: " + String(c) + " (ON for 5s)");
     } else {
@@ -415,19 +442,13 @@ void loop() {
   }
 
   // Hardware Buzzer/Alarm handling asynchronously
+  // Buzzer and LED will stay ON until 'STOP' command is received via
+  // BLE, OR until the buzzerDuration expires safely.
   if (buzzerActive) {
-    if (currentMillis - buzzerStartTime < buzzerDuration) {
-      // Stay ON continuously for the duration (already turned ON at trigger
-      // time)
-    } else {
+    if (currentMillis - buzzerStartTime >= buzzerDuration) {
       buzzerActive = false;
       beepBuzzer(false);
-      printEvent("Slot event complete. Turning OFF buzzer/LED.");
-      if (!testLedActive) {
-        turnOffLed();
-      }
-      activeLedRow = -1;
-      activeLedCol = -1;
+      printEvent("Buzzer auto-stopped after duration.");
     }
   }
 

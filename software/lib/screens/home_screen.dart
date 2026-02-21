@@ -95,9 +95,34 @@ class DayGrid extends StatelessWidget {
   }
 }
 
-class CompartmentCard extends StatelessWidget {
+class CompartmentCard extends StatefulWidget {
   final Compartment compartment;
   const CompartmentCard({super.key, required this.compartment});
+
+  @override
+  State<CompartmentCard> createState() => _CompartmentCardState();
+}
+
+class _CompartmentCardState extends State<CompartmentCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.0, end: 8.0).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -105,7 +130,7 @@ class CompartmentCard extends StatelessWidget {
         return Colors.grey.shade400;
       case 'upcoming':
         return Colors.blue.shade400;
-      case 'taken':
+      case 'done':
         return Colors.green.shade400;
       case 'missed':
         return Colors.red.shade400;
@@ -116,53 +141,97 @@ class CompartmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: _getStatusColor(compartment.status),
-      child: InkWell(
-        onTap: () {
-          showDialog(
-            context: context,
-            builder: (_) => EditDialog(compartment: compartment),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                compartment.slotName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+    bool canConfirm =
+        (widget.compartment.status.toLowerCase() == 'upcoming' ||
+            widget.compartment.status.toLowerCase() == 'missed') &&
+        widget.compartment.medicineName.isNotEmpty;
+
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+          child: Card(
+            color: _getStatusColor(widget.compartment.status),
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: InkWell(
+              onTap: () async {
+                await showDialog(
+                  context: context,
+                  builder: (_) => EditDialog(compartment: widget.compartment),
+                );
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      widget.compartment.slotName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    if (widget.compartment.medicineName.isNotEmpty) ...[
+                      Text(
+                        widget.compartment.medicineName,
+                        style: const TextStyle(fontSize: 16),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '${widget.compartment.time} | ${widget.compartment.dosage}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ] else ...[
+                      const Text('Empty', textAlign: TextAlign.center),
+                    ],
+                    const Spacer(),
+                    if (canConfirm)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.blueGrey,
+                          padding: const EdgeInsets.symmetric(vertical: 0),
+                        ),
+                        onPressed: () {
+                          // Call markAsTaken via Provider
+                          context.read<AppState>().markAsTaken(
+                            widget.compartment,
+                          );
+                        },
+                        child: const Text(
+                          'Confirm Intake',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    else
+                      Text(
+                        widget.compartment.status,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        textAlign: TextAlign.center,
+                      ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
-              if (compartment.medicineName.isNotEmpty) ...[
-                Text(
-                  compartment.medicineName,
-                  style: const TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
-                Text(
-                  '\${compartment.time} | \${compartment.dosage}',
-                  textAlign: TextAlign.center,
-                ),
-              ] else ...[
-                const Text('Empty', textAlign: TextAlign.center),
-              ],
-              const Spacer(),
-              Text(
-                compartment.status,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-                textAlign: TextAlign.center,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
