@@ -132,24 +132,16 @@ User confirms intake → status updated
 #### Schematic & Circuit
 
 Circuit Diagram: 
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/433260cf-260a-4bc5-8af3-0187acab2937" />
+
 The circuit consists of a 3×6 LED matrix controlled by an ESP32 using multiplexing. The three positive row lines are connected to dedicated ESP32 GPIO pins through 1kΩ current-limiting resistors (one resistor per row) to protect the LEDs. The six negative column lines are directly connected to six separate GPIO pins on the ESP32, allowing selective control of each LED by activating a specific row and column combination. An active buzzer is connected to another dedicated GPIO pin with its negative terminal connected to GND for audio alerts. All components share a common ground, and the ESP32 is powered via USB (5V), ensuring stable operation of the entire system.
 
-![Schematic](Add your schematic diagram here)
-*Add caption explaining the schematic*
-
+Schematic Diagram:
+The schematic diagram presents the logical design of the 3 × 6 LED matrix controlled by the ESP32. It shows three row lines (positive) connected to GPIO pins through 1kΩ current-limiting resistors, ensuring safe current flow to the LEDs. The six column lines (negative) are connected directly to separate GPIO pins configured as sinking outputs. By using multiplexing, the ESP32 activates one row at a time while selecting the required column, allowing individual control of all 18 LEDs with minimal GPIO usage. The schematic also includes an active buzzer connected to a dedicated GPIO pin and GND, which is triggered during scheduled alert conditions. All components share a common ground and are powered via a stable 5V USB supply.
 #### Build Photos
 
-![Team](Add photo of your team here)
-![Uploading 0.jpg…]()
+![IMG_20260221_091016714 (1)](https://github.com/user-attachments/assets/e07a94c1-f364-4a54-8e3f-ad12728f96a1)
 
-![Components](Add photo of your components here)
-00*List out all components shown*
-
-![Build](Add photos of build process here)
-*Explain the build steps*
-
-![Final](Add photo of final product here)
-*Explain the final build*
 
 ---
 
@@ -222,7 +214,7 @@ Test each row and column to confirm correct LED activation.
 ## Project Demo
 
 ### Video
-
+https://drive.google.com/drive/folders/1iY16gzxxFUQbxXte9GzcVOZMLpKaO7ag
 ---
 
 ## AI Tools Used 
