@@ -186,33 +186,37 @@ User confirms intake → status updated
 
 #### Assembly Instructions
 
-**Step 1: Prepare Components**
-1. Gather all components listed in the BOM
-2. Check component specifications
-3. Prepare your workspace
-![Step 1](images/assembly-step1.jpg)
-*Caption: All components laid out*
+**Prepare the Workspace**
+Place the ESP32 board on the breadboard.
+Ensure the board is positioned so both sides of GPIO pins are accessible.
 
-**Step 2: Build the Power Supply**
-1. Connect the power rails on the breadboard
-2. Connect Arduino 5V to breadboard positive rail
-3. Connect Arduino GND to breadboard negative rail
-![Step 2](images/assembly-step2.jpg)
-*Caption: Power connections completed*
+**Create the 3×6 LED Matrix**
+Arrange 18 LEDs in a grid of 3 rows × 6 columns.
+Connect the anodes (positive legs) of each row together horizontally.
+Connect the cathodes (negative legs) of each column together vertically.
 
-**Step 3: Add Components**
-1. Place LEDs on breadboard
-2. Connect resistors in series with LEDs
-3. Connect LED cathodes to GND
-4. Connect LED anodes to Arduino digital pins (2-6)
-![Step 3](images/assembly-step3.jpg)
-*Caption: LED circuit assembled*
+**Connect Row Lines (Positive)**
+Connect each of the 3 row lines to the ESP32 GPIO pins through 1kΩ resistors (one resistor per row).
+**Connect Column Lines (Negative)**
+Connect each of the 6 column lines directly to dedicated ESP32 GPIO pins.
 
-**Step 4: [Continue for all steps...]**
+**Connect the Buzzer**
+Connect the positive terminal of the active buzzer to GPIO 15.
+Connect the negative terminal to GND.
 
-**Final Assembly:**
-![Final Build](images/final-build.jpg)
-*Caption: Completed project ready for testing*
+**Establish Common Ground**
+
+Ensure all GND connections (LED matrix, buzzer, ESP32) are connected to a common ground rail on the breadboard.
+
+**Power the System**
+Connect the ESP32 to a 5V USB power source.
+Verify power indicator LED on ESP32 turns ON.
+
+**Upload Firmware**
+
+Connect ESP32 to your computer.
+Upload the program that controls LED multiplexing and buzzer alerts.
+Test each row and column to confirm correct LED activation.
 
 
 ## Project Demo
@@ -227,11 +231,11 @@ User confirms intake → status updated
 
 ---
 
-## AI Tools Used (Optional - For Transparency Bonus)
+## AI Tools Used 
 
 If you used AI tools during development, document them here for transparency:
 
-**Tool Used:** [e.g., GitHub Copilot, v0.dev, Cursor, ChatGPT, Claude]
+**Tool Used:**  ChatGPT, Claude 
 
 **Purpose:** [What you used it for]
 - Example: "Generated boilerplate React components"
