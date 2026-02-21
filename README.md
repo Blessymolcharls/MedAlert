@@ -1,3 +1,7 @@
+
+<img width="1280" height="640" alt="image" src="https://github.com/user-attachments/assets/d6218733-0a3d-4bb5-91fd-0569581ce4d9" />
+
+
 # MedAlert  💊
 
 ## Basic Details
