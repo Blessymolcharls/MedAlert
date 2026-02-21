@@ -222,12 +222,6 @@ Test each row and column to confirm correct LED activation.
 ## Project Demo
 
 ### Video
-[Add your demo video link here - YouTube, Google Drive, etc.]
-
-*Explain what the video demonstrates - key features, user flow, technical highlights*
-
-### Additional Demos
-[Add any extra demo materials/links - Live site, APK download, online demo, etc.]
 
 ---
 
@@ -238,37 +232,39 @@ If you used AI tools during development, document them here for transparency:
 **Tool Used:**  ChatGPT, Claude 
 
 **Purpose:** [What you used it for]
-- Example: "Generated boilerplate React components"
-- Example: "Debugging assistance for async functions"
-- Example: "Code review and optimization suggestions"
+- Generated Flutter UI components and page structure
+- Designed the app theme (colors, typography, card styles)
+- Created step-by-step implementation prompts for each screen
+- Debugging assistance for state management and widget layout
+- Code review and UI polish suggestions
+
 
 **Key Prompts Used:**
-- "Create a REST API endpoint for user authentication"
-- "Debug this async function that's causing race conditions"
-- "Optimize this database query for better performance"
+- "Create a Flutter mobile app with a healthcare theme using deep green, cream background, and muted yellow accent"
+- "Build a day selector with 7 toggleable chips that highlight in dark green when selected"
+- "Create 3 medicine section cards (Morning, Noon, Night) each with a time picker, medicine name input, dosage input, and before/after food toggle"
+- "Add a floating + Add Reminder button with StadiumBorder shape that navigates to the Add Reminder page"
+- "Implement a success animation with scale transition and floating SnackBar after saving a reminder"
 
-**Percentage of AI-generated code:** [Approximately X%]
+**Percentage of AI-generated code:** 60%
 
 **Human Contributions:**
-- Architecture design and planning
-- Custom business logic implementation
-- Integration and testing
-- UI/UX design decisions
+- Problem identification and overall project concept
+- Hardware architecture design (ESP32 + RTC + LED + Buzzer circuit)
+- Deciding app structure, navigation flow, and feature scope
+- Integration of Flutter app with ESP32 over WiFi
+- Real device testing and debugging
+- UI/UX design decisions and color scheme selection
+- Customizing and fixing AI-generated code to match actual requirements
 
-*Note: Proper documentation of AI usage demonstrates transparency and earns bonus points in evaluation!*
 
 ---
 
 ## Team Contributions
 
-- [Name 1]: [Specific contributions - e.g., Frontend development, API integration, etc.]
-- [Name 2]: [Specific contributions - e.g., Backend development, Database design, etc.]
-
+- Blessy Mol Charls [Flutter development, UI/UX, Hive integration,BLE logic]
+- Niharika C [Hardware design, ESP32 firmware,Documentation]
 ---
 
 ## License
-
-This project is licensed under the [LICENSE_NAME] License - see the [LICENSE](LICENSE) file for details.
-
-**Common License Options:**
-- MIT License (Permissive, widely used)
+This project is licensed under the MIT License.
