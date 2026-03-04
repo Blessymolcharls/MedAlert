@@ -258,7 +258,7 @@ If you used AI tools during development, document them here for transparency:
 
 ## Team Contributions
 
-- Blessy Mol Charls [Flutter development, UI/UX, Hive integration,BLE logic]
+- Blessy Mol Charls [Flutter development, UI/UX, Hive integration,BLE logic, LED grid hardware]
 - Niharika C [Hardware design, ESP32 firmware,Documentation]
 ---
 
