@@ -97,9 +97,9 @@ class AppState extends ChangeNotifier {
     }
 
     String currentDayStr = '';
-    if (now.weekday == DateTime.monday)
+    if (now.weekday == DateTime.monday) {
       currentDayStr = 'Monday';
-    else if (now.weekday == DateTime.tuesday)
+    } else if (now.weekday == DateTime.tuesday)
       currentDayStr = 'Tuesday';
     else if (now.weekday == DateTime.wednesday)
       currentDayStr = 'Wednesday';

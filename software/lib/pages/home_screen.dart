@@ -76,13 +76,13 @@ class DayGrid extends StatelessWidget {
         final compartments = state.getCompartmentsForDay(day);
 
         return GridView.builder(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount:
                 2, // 2 columns for better layout, or maybe ListView since web doesn't require 6 cols on phones
-            childAspectRatio: 1.2,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+            childAspectRatio: 1.1,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
           ),
           itemCount: compartments.length,
           itemBuilder: (context, index) {
@@ -127,15 +127,19 @@ class _CompartmentCardState extends State<CompartmentCard>
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'empty':
-        return Colors.grey.shade400;
+        return const Color(0xFFE8ECEB); // lighter desaturated green/grey tint
       case 'upcoming':
-        return Colors.blue.shade400;
+        return Colors.white; // Active with upcoming pill
       case 'done':
-        return Colors.green.shade400;
+        return const Color(0xFFE8F5E9);
       case 'missed':
-        return Colors.red.shade400;
+        return const Color(0xFFFFEBEE);
+      case 'active':
+        return const Color(
+          0xFF1F4D45,
+        ).withOpacity(0.1); // soft opacity primary green
       default:
-        return Colors.grey.shade400;
+        return const Color(0xFFE8ECEB);
     }
   }
 
@@ -150,12 +154,21 @@ class _CompartmentCardState extends State<CompartmentCard>
       animation: _animation,
       builder: (context, child) {
         return Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Card(
             color: _getStatusColor(widget.compartment.status),
             margin: EdgeInsets.zero,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: InkWell(
               onTap: () async {
@@ -168,7 +181,7 @@ class _CompartmentCardState extends State<CompartmentCard>
                 }
               },
               child: Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -176,34 +189,52 @@ class _CompartmentCardState extends State<CompartmentCard>
                     Text(
                       widget.compartment.slotName,
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontWeight: FontWeight.w600, // SemiBold
+                        fontSize: 16,
+                        color: Color(0xFF1F4D45),
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     if (widget.compartment.medicineName.isNotEmpty) ...[
                       Text(
                         widget.compartment.medicineName,
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500, // Medium
+                          color: Colors.black87,
+                        ),
                         textAlign: TextAlign.center,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         '${widget.compartment.time} | ${widget.compartment.dosage}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 12),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400, // Regular
+                          color: Colors.black54,
+                        ),
                       ),
                     ] else ...[
-                      const Text('Empty', textAlign: TextAlign.center),
+                      const Text(
+                        'Empty',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black38, fontSize: 15),
+                      ),
                     ],
                     const Spacer(),
                     if (canConfirm)
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.blueGrey,
+                          backgroundColor: const Color(0xFF1F4D45),
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                         onPressed: () {
                           // Call markAsTaken via Provider
@@ -219,10 +250,37 @@ class _CompartmentCardState extends State<CompartmentCard>
                           ),
                         ),
                       )
-                    else
+                    else if (widget.compartment.status.toLowerCase() ==
+                        'upcoming')
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 6,
+                          horizontal: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5C842), // Accent yellow
+                          borderRadius: BorderRadius.circular(
+                            16,
+                          ), // Rounded pill
+                        ),
+                        child: const Text(
+                          'Upcoming',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else if (widget.compartment.status.toLowerCase() != 'empty')
                       Text(
                         widget.compartment.status,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          color: Colors.black54,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                   ],

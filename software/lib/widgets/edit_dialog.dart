@@ -84,6 +84,7 @@ class _EditDialogState extends State<EditDialog> {
               controller: _medicineController,
               decoration: const InputDecoration(labelText: 'Medicine Name'),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: _dosageController,
               decoration: const InputDecoration(

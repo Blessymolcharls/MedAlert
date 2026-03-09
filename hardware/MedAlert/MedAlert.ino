@@ -366,7 +366,7 @@ void setup() {
   }
 
   // BLE Setup
-  BLEDevice::init("MedAlert");
+  BLEDevice::init("MedAlert_ESP32");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
@@ -384,7 +384,7 @@ void setup() {
 
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(false);
+  pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(
       0x0); // Functions that help with iPhone connections issue
   pAdvertising->setMinPreferred(0x06);
