@@ -1,3 +1,7 @@
+
+<img width="1280" height="640" alt="image" src="https://github.com/user-attachments/assets/d6218733-0a3d-4bb5-91fd-0569581ce4d9" />
+
+
 # MedAlert  💊
 
 ## Basic Details
@@ -254,7 +258,7 @@ If you used AI tools during development, document them here for transparency:
 
 ## Team Contributions
 
-- Blessy Mol Charls [Flutter development, UI/UX, Hive integration,BLE logic]
+- Blessy Mol Charls [Flutter development, UI/UX, Hive integration,BLE logic, LED grid hardware]
 - Niharika C [Hardware design, ESP32 firmware,Documentation]
 ---
 
