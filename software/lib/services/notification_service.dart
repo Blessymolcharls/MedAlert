@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 import '../models/reminder.dart';
 import '../models/compartment.dart';
 
@@ -17,6 +18,13 @@ class NotificationService {
   Future<void> init() async {
     // 1. Initialize timezones for scheduled notifications
     tz.initializeTimeZones();
+    try {
+      final String timeZoneName = (await FlutterTimezone.getLocalTimezone()).identifier;
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+    } catch (e) {
+      print('Could not get local timezone: $e');
+    }
+
 
     // 2. Setup initialization settings
     const AndroidInitializationSettings androidSettings =

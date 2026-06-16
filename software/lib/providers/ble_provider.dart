@@ -49,8 +49,9 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
   Future<void> connect() async {
     if (_status == BleStatus.scanning ||
         _status == BleStatus.connecting ||
-        _status == BleStatus.connected)
+        _status == BleStatus.connected) {
       return;
+    }
 
     await startScan();
   }
