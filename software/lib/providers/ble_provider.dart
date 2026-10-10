@@ -4,7 +4,6 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/ble_service.dart';
 import '../models/reminder.dart';
 import '../main.dart';
-import 'dart:convert';
 
 enum BleStatus { disconnected, scanning, connecting, connected }
 
@@ -14,10 +13,25 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
   BleStatus _status = BleStatus.disconnected;
   BluetoothDevice? _connectedDevice;
   StreamSubscription? _connectionSubscription;
+  DateTime? _lastSyncTime;
+  bool _isAutoReconnecting = false;
 
   BleStatus get status => _status;
   bool get isConnected => _status == BleStatus.connected;
   BluetoothDevice? get connectedDevice => _connectedDevice;
+  DateTime? get lastSyncTime => _lastSyncTime;
+  BleService get bleService => _bleService;
+
+  String? get deviceName {
+    if (_connectedDevice == null) return null;
+    return _connectedDevice!.platformName.isNotEmpty
+        ? _connectedDevice!.platformName
+        : (_connectedDevice!.advName.isNotEmpty
+              ? _connectedDevice!.advName
+              : "MedAlert_ESP32");
+  }
+
+  String? get deviceId => _connectedDevice?.remoteId.str;
 
   BleProvider() {
     WidgetsBinding.instance.addObserver(this);
@@ -34,7 +48,8 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
-        _status == BleStatus.disconnected) {
+        _status == BleStatus.disconnected &&
+        !_isAutoReconnecting) {
       autoReconnect();
     }
   }
@@ -52,7 +67,6 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
         _status == BleStatus.connected) {
       return;
     }
-
     await startScan();
   }
 
@@ -71,7 +85,7 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     } catch (e) {
       _setStatus(BleStatus.disconnected);
-      _showSnackBar("MedAlert device not found", Colors.red);
+      _showSnackBar("Bluetooth error: $e", Colors.red);
     }
   }
 
@@ -82,16 +96,16 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
     _connectionSubscription = _connectedDevice!.connectionState.listen((state) {
       if (state == BluetoothConnectionState.connected) {
         _setStatus(BleStatus.connected);
+        _lastSyncTime = DateTime.now();
         _showSnackBar("Connected to MedAlert Box", Colors.green);
       } else if (state == BluetoothConnectionState.disconnected) {
-        if (_status == BleStatus.connected) {
-          _setStatus(BleStatus.disconnected);
-          _showSnackBar("Device disconnected", Colors.red);
-        } else {
-          _setStatus(BleStatus.disconnected);
-        }
+        final wasConnected = _status == BleStatus.connected;
+        _setStatus(BleStatus.disconnected);
         _connectedDevice = null;
         _connectionSubscription?.cancel();
+        if (wasConnected) {
+          _showSnackBar("Device disconnected", Colors.red);
+        }
       }
     });
   }
@@ -104,68 +118,86 @@ class BleProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   Future<void> autoReconnect() async {
-    // If previously connected device exists in FlutterBluePlus system
-    List<BluetoothDevice> systemDevices = await FlutterBluePlus.systemDevices(
-      [],
-    );
-    for (var d in systemDevices) {
-      if (d.platformName.contains("MedAlert") ||
-          d.advName.contains("MedAlert")) {
-        _connectedDevice = d;
-        _setStatus(BleStatus.connecting);
-        try {
-          await d.connect(
-            timeout: const Duration(seconds: 10),
-            license: License.free,
-          );
-          _listenToConnectionState();
-          return;
-        } catch (e) {
-          _setStatus(BleStatus.disconnected);
-          _connectedDevice = null;
+    if (_isAutoReconnecting || _status == BleStatus.connected) return;
+    _isAutoReconnecting = true;
+
+    try {
+      final systemDevices = await FlutterBluePlus.systemDevices([]);
+      for (var d in systemDevices) {
+        if (d.platformName.contains("MedAlert") ||
+            d.advName.contains("MedAlert")) {
+          _connectedDevice = d;
+          _setStatus(BleStatus.connecting);
+          final success = await _bleService.connectToDeviceInstance(d);
+          if (success) {
+            _listenToConnectionState();
+            _isAutoReconnecting = false;
+            return;
+          } else {
+            _setStatus(BleStatus.disconnected);
+            _connectedDevice = null;
+          }
         }
       }
+    } catch (_) {
+      // Ignore background auto-reconnect scan errors
+    } finally {
+      _isAutoReconnecting = false;
     }
   }
 
-  // IoT Ready: structure method and placeholder call
-  Future<void> sendRemindersToDevice(List<Reminder> reminders) async {
+  /// Syncs reminder schedules with the physical ESP32 pillbox.
+  Future<bool> sendRemindersToDevice(List<Reminder> reminders) async {
     if (!isConnected || _connectedDevice == null) {
-      print("Cannot send reminders: Device not connected.");
-      return;
+      return false;
     }
 
     try {
-      final String jsonPayload = jsonEncode(
-        reminders.map((r) => r.toJson()).toList(),
-      );
-      // ignore: unused_local_variable
-      print("Sending reminders payload: \$jsonPayload");
-      // Placeholder: actual characteristic write would go here
+      int getRowForSection(String section) {
+        final s = section.toLowerCase();
+        if (s.contains("noon")) return 1;
+        if (s.contains("night")) return 2;
+        return 0; // Morning default
+      }
+
+      int colIndex = 0;
+      for (var reminder in reminders) {
+        final row = getRowForSection(reminder.section);
+        final col = (colIndex % 6);
+        final hStr = reminder.time.hour.toString().padLeft(2, '0');
+        final mStr = reminder.time.minute.toString().padLeft(2, '0');
+        final timeStr = "$hStr:$mStr";
+
+        await _bleService.setSlot(row, col, timeStr);
+        colIndex++;
+      }
+
+      _lastSyncTime = DateTime.now();
+      notifyListeners();
+      return true;
     } catch (e) {
-      print("Error packaging reminders: \$e");
+      debugPrint("BLE: Error syncing reminders: $e");
+      return false;
+    }
+  }
+
+  /// Sends STOP command to turn off physical alert when medicine is taken.
+  Future<void> stopAlert() async {
+    if (isConnected) {
+      await _bleService.stopAlert();
     }
   }
 
   void _showSnackBar(String message, Color backgroundColor) {
-    // ScaffoldMessenger relies on global context or a specific key.
-    // For simplicity, we use the root messenger if accessible, or we leave logic to UI.
-    // Since we need to show snackbars natively from Provider, using scaffold messenger global key is best.
-    // Wait, let's use a simpler approach or rely on the UI to react.
-    // However, the requested rule "If device not found: Show floating SnackBar"
-    // I will use a minimal static dispatch.
     try {
-      // Find navigator key or use builder context. In a standard setup, we can't easily show a snackbar from provider without context.
-      // But we can define a global key. Since we don't have one set up yet, we will just print and let the user handle it or use a callback.
-      // Actually, we can dispatch it utilizing the current context if we pass it, but we can't.
-      // Let's implement a quick workaround or keep it simple.
       scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor: backgroundColor,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
         ),
       );
-    } catch (e) {}
+    } catch (_) {}
   }
 }

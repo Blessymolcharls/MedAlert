@@ -27,8 +27,15 @@ class Reminder {
     this.isMissedToday = false,
   });
 
-  bool isDueNow() {
-    final now = DateTime.now();
+  bool get isValid =>
+      id.isNotEmpty &&
+      name.trim().isNotEmpty &&
+      dosage.trim().isNotEmpty &&
+      selectedDays.isNotEmpty &&
+      selectedDays.every((d) => d >= 0 && d <= 6);
+
+  bool isDueNow({DateTime? referenceTime}) {
+    final now = referenceTime ?? DateTime.now();
     final reminderTime = DateTime(
       now.year,
       now.month,
@@ -39,9 +46,9 @@ class Reminder {
     return now.isAfter(reminderTime) || now.isAtSameMomentAs(reminderTime);
   }
 
-  bool isMissed() {
+  bool isMissed({DateTime? referenceTime}) {
     if (isTakenToday) return false;
-    final now = DateTime.now();
+    final now = referenceTime ?? DateTime.now();
     final reminderTime = DateTime(
       now.year,
       now.month,
@@ -53,8 +60,8 @@ class Reminder {
     return difference > 15;
   }
 
-  bool canConfirmNow() {
-    final now = DateTime.now();
+  bool canConfirmNow({DateTime? referenceTime}) {
+    final now = referenceTime ?? DateTime.now();
     final scheduled = DateTime(
       now.year,
       now.month,
@@ -73,6 +80,34 @@ class Reminder {
   void resetDailyStatus() {
     isTakenToday = false;
     isMissedToday = false;
+  }
+
+  Reminder copyWith({
+    String? id,
+    String? name,
+    String? dosage,
+    TimeOfDay? time,
+    bool? isAfterFood,
+    String? section,
+    List<int>? selectedDays,
+    DateTime? createdAt,
+    DateTime? lastTakenAt,
+    bool? isTakenToday,
+    bool? isMissedToday,
+  }) {
+    return Reminder(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      dosage: dosage ?? this.dosage,
+      time: time ?? this.time,
+      isAfterFood: isAfterFood ?? this.isAfterFood,
+      section: section ?? this.section,
+      selectedDays: selectedDays ?? List.from(this.selectedDays),
+      createdAt: createdAt ?? this.createdAt,
+      lastTakenAt: lastTakenAt ?? this.lastTakenAt,
+      isTakenToday: isTakenToday ?? this.isTakenToday,
+      isMissedToday: isMissedToday ?? this.isMissedToday,
+    );
   }
 
   Map<String, dynamic> toMap() {
@@ -94,19 +129,26 @@ class Reminder {
 
   factory Reminder.fromMap(Map<String, dynamic> map) {
     return Reminder(
-      id: map['id'],
-      name: map['name'],
-      dosage: map['dosage'],
-      time: TimeOfDay(hour: map['timeHour'], minute: map['timeMinute']),
-      isAfterFood: map['isAfterFood'],
-      section: map['section'],
-      selectedDays: List<int>.from(map['selectedDays']),
-      createdAt: DateTime.parse(map['createdAt']),
+      id: map['id'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      dosage: map['dosage'] as String? ?? '',
+      time: TimeOfDay(
+        hour: map['timeHour'] as int? ?? 0,
+        minute: map['timeMinute'] as int? ?? 0,
+      ),
+      isAfterFood: map['isAfterFood'] as bool? ?? true,
+      section: map['section'] as String? ?? 'Morning',
+      selectedDays: map['selectedDays'] != null
+          ? List<int>.from(map['selectedDays'])
+          : [0, 1, 2, 3, 4, 5, 6],
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt']) ?? DateTime.now()
+          : DateTime.now(),
       lastTakenAt: map['lastTakenAt'] != null
-          ? DateTime.parse(map['lastTakenAt'])
+          ? DateTime.tryParse(map['lastTakenAt'])
           : null,
-      isTakenToday: map['isTakenToday'] ?? false,
-      isMissedToday: map['isMissedToday'] ?? false,
+      isTakenToday: map['isTakenToday'] as bool? ?? false,
+      isMissedToday: map['isMissedToday'] as bool? ?? false,
     );
   }
 

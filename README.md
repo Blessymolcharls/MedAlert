@@ -83,16 +83,26 @@ flutter run
 ### For Hardware:
 
 #### Components Required
-- ESP32 Board
-- LED matrix configuration (18)
-- Resistors (1kΩ)
-- Active Buzzer
-- Breadboard
-- Jumper wires
-- Power supply
+- ESP32 Development Board (30-pin / 38-pin)
+- 18 LEDs (3 Rows × 6 Columns matrix arrangement)
+- 3 × 220Ω Current-limiting resistors (one per row anode line; 1kΩ may be used optionally as pull-ups, but 220Ω is recommended for optimal LED brightness at 3.3V logic)
+- Active Buzzer (5V / 3.3V compatible)
+- Breadboard & Jumper wires
+- Micro-USB cable & 5V Power supply
 
-#### Circuit Setup
-The circuit is designed using a 3 × 6 LED matrix configuration, where the 18 LEDs are arranged with 3 positive rows and 6 negative columns. The anodes (positive terminals) of each row are connected together and linked to three ESP32 GPIO pins through 220Ω current-limiting resistors (one resistor per row). The cathodes (negative terminals) of each column are connected vertically and directly connected to six dedicated ESP32 GPIO pins. This setup allows multiplexed control of all 18 LEDs using 9 GPIO pins (3 rows + 6 columns). An active buzzer is connected to another GPIO pin (positive to GPIO, negative to GND) to provide audio alerts. The ESP32 is powered via USB (5V), and all components share a common ground. When a scheduled time is reached, the ESP32 activates the corresponding row and column to light the specific LED while simultaneously triggering the buzzer.
+#### Circuit Setup & Pin Mapping
+The circuit uses a 3 × 6 LED matrix configuration, where the 18 LEDs are arranged with 3 positive rows and 6 negative columns:
+- **Row Anodes (Positive):**
+  - Row 0 (Morning): ESP32 GPIO 25 (via 220Ω resistor)
+  - Row 1 (Noon): ESP32 GPIO 26 (via 220Ω resistor)
+  - Row 2 (Night): ESP32 GPIO 27 (via 220Ω resistor)
+  *Resistor calculation:* At 3.3V supply and typical LED forward voltage $V_f \approx 2.0\text{V}$, $I = \frac{3.3\text{V} - 2.0\text{V}}{220\Omega} \approx 5.9\text{ mA}$, providing clear visibility within the ESP32's 12–20 mA pin limit. (1kΩ resistors would limit current to ~1.3 mA, resulting in excessively dim indicators in daylight).
+- **Column Cathodes (Negative):**
+  - Col 0 to 5: Connected directly to ESP32 GPIOs 14, 12, 13, 23, 22, and 21 respectively.
+- **Active Buzzer:**
+  - Connected to ESP32 GPIO 19 (active-low drive) and shared GND.
+- **Ground & Power:**
+  - ESP32 is powered via 5V USB, and all components share common GND. When a scheduled medication time arrives, the ESP32 sets the corresponding row HIGH and column LOW while sounding the buzzer.
 
 ---
 

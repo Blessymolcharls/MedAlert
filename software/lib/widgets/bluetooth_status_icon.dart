@@ -51,7 +51,7 @@ class _BluetoothStatusIconState extends State<BluetoothStatusIcon>
           case BleStatus.disconnected:
             iconData = Icons.bluetooth_disabled;
             foregroundColor = Colors.red;
-            backgroundColor = Colors.red.withOpacity(0.15);
+            backgroundColor = Colors.red.withValues(alpha: 0.15);
             _animController.stop();
             _animController.value = 0.0;
             break;
@@ -60,7 +60,7 @@ class _BluetoothStatusIconState extends State<BluetoothStatusIcon>
           case BleStatus.connecting:
             iconData = Icons.bluetooth_searching;
             foregroundColor = Colors.orange;
-            backgroundColor = Colors.orange.withOpacity(0.15);
+            backgroundColor = Colors.orange.withValues(alpha: 0.15);
             isPulsing = true;
             if (!_animController.isAnimating) {
               _animController.repeat(reverse: true);
@@ -70,7 +70,7 @@ class _BluetoothStatusIconState extends State<BluetoothStatusIcon>
           case BleStatus.connected:
             iconData = Icons.bluetooth_connected;
             foregroundColor = Colors.green;
-            backgroundColor = Colors.green.withOpacity(0.15); // soft glow
+            backgroundColor = Colors.green.withValues(alpha: 0.15); // soft glow
 
             // bounce once
             if (_animController.isAnimating || _animController.value == 0.0) {

@@ -68,7 +68,7 @@ class AppState extends ChangeNotifier {
         _applyFullScheduleToHive(data);
       }
     } catch (e) {
-      print('Error during manual sync: $e');
+      debugPrint('Error during manual sync: $e');
     }
   }
 
@@ -99,10 +99,11 @@ class AppState extends ChangeNotifier {
     String currentDayStr = '';
     if (now.weekday == DateTime.monday) {
       currentDayStr = 'Monday';
-    } else if (now.weekday == DateTime.tuesday)
+    } else if (now.weekday == DateTime.tuesday) {
       currentDayStr = 'Tuesday';
-    else if (now.weekday == DateTime.wednesday)
+    } else if (now.weekday == DateTime.wednesday) {
       currentDayStr = 'Wednesday';
+    }
 
     for (String day in days) {
       final compartments = storageService.getCompartmentsForDay(day);
@@ -208,7 +209,7 @@ class AppState extends ChangeNotifier {
               notificationService.scheduleNotification(existing);
             }
           } catch (e) {
-            print('Error parsing slot: \$e');
+            debugPrint('Error parsing slot: $e');
           }
         }
       }
@@ -219,10 +220,10 @@ class AppState extends ChangeNotifier {
   void _handleBleNotification(Map<String, dynamic> data) {
     if (data.containsKey('status')) {
       if (data['status'] == 'schedule_updated') {
-        print("Schedule updated internally on device.");
+        debugPrint("Schedule updated internally on device.");
         // We could fetch the new schedule, but since the app probably triggered it, it's fine.
       } else if (data['status'] == 'reminder_triggered') {
-        print("A reminder was triggered on the device.");
+        debugPrint("A reminder was triggered on the device.");
       }
     }
   }

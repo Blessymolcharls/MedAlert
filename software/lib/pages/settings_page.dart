@@ -1,37 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/theme_provider.dart';
 import '../providers/ble_provider.dart';
+import '../providers/reminder_provider.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
-
-  @override
-  State<SettingsPage> createState() => _SettingsPageState();
-}
-
-class _SettingsPageState extends State<SettingsPage> {
-  String _lastResetDate = "Never";
-
-  @override
-  void initState() {
-    super.initState();
-    _loadResetDate();
-  }
-
-  Future<void> _loadResetDate() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _lastResetDate = prefs.getString('lastResetDate') ?? "Never";
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final bleProvider = Provider.of<BleProvider>(context);
+    final reminderProvider = Provider.of<ReminderProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: Colors.transparent, // inherited from MainShell
@@ -44,9 +26,7 @@ class _SettingsPageState extends State<SettingsPage> {
               style: GoogleFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : const Color(0xFF1F4D45),
+                color: isDark ? Colors.white : const Color(0xFF1F4D45),
               ),
             ),
             const SizedBox(height: 24),
@@ -85,42 +65,114 @@ class _SettingsPageState extends State<SettingsPage> {
                         Icon(
                           bleProvider.isConnected
                               ? Icons.bluetooth_connected
-                              : Icons.bluetooth_disabled,
+                              : (bleProvider.status == BleStatus.scanning
+                                    ? Icons.bluetooth_searching
+                                    : Icons.bluetooth_disabled),
                           color: bleProvider.isConnected
                               ? Colors.green
-                              : Colors.red,
+                              : (bleProvider.status == BleStatus.scanning
+                                    ? Colors.orange
+                                    : Colors.red),
                         ),
                         const SizedBox(width: 12),
-                        Text(
-                          bleProvider.isConnected
-                              ? "Connected to MedAlert Box"
-                              : "Disconnected",
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                bleProvider.isConnected
+                                    ? (bleProvider.deviceName ??
+                                          "Connected to MedAlert Box")
+                                    : (bleProvider.status == BleStatus.scanning
+                                          ? "Scanning for MedAlert..."
+                                          : "Disconnected"),
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (bleProvider.isConnected &&
+                                  bleProvider.deviceId != null)
+                                Text(
+                                  "Device ID: ${bleProvider.deviceId}",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              if (bleProvider.lastSyncTime != null)
+                                Text(
+                                  "Last synced: ${TimeOfDay.fromDateTime(bleProvider.lastSyncTime!).format(context)}",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (bleProvider.isConnected) {
-                          bleProvider.disconnect();
-                        } else {
-                          bleProvider.connect();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: bleProvider.isConnected
-                            ? Colors.red.shade50
-                            : const Color(0xFF1F4D45),
-                        foregroundColor: bleProvider.isConnected
-                            ? Colors.red
-                            : Colors.white,
-                      ),
-                      child: Text(
-                        bleProvider.isConnected
-                            ? "Disconnect"
-                            : "Reconnect Device",
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (bleProvider.isConnected) {
+                                bleProvider.disconnect();
+                              } else {
+                                bleProvider.connect();
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: bleProvider.isConnected
+                                  ? Colors.red.shade50
+                                  : const Color(0xFF1F4D45),
+                              foregroundColor: bleProvider.isConnected
+                                  ? Colors.red
+                                  : Colors.white,
+                            ),
+                            child: Text(
+                              bleProvider.isConnected
+                                  ? "Disconnect"
+                                  : (bleProvider.status == BleStatus.scanning
+                                        ? "Scanning..."
+                                        : "Connect Device"),
+                            ),
+                          ),
+                        ),
+                        if (bleProvider.isConnected) ...[
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              final ok = await bleProvider
+                                  .sendRemindersToDevice(
+                                    reminderProvider.reminders,
+                                  );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      ok
+                                          ? "Schedules synced to ESP32!"
+                                          : "Failed to sync schedules",
+                                    ),
+                                    backgroundColor: ok
+                                        ? Colors.green
+                                        : Colors.red,
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.sync, size: 16),
+                            label: const Text("Sync Box"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1F4D45),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -128,16 +180,42 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 16),
 
-            // Daily Reset Logic Module
-            _buildSectionHeader("System Status"),
+            // Daily Maintenance Status Module
+            _buildSectionHeader("System Status & Maintenance"),
             Card(
-              child: ListTile(
-                leading: const Icon(Icons.history, color: Color(0xFF1F4D45)),
-                title: Text(
-                  "Last Daily Reset",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(_lastResetDate, style: GoogleFonts.inter()),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.history,
+                      color: Color(0xFF1F4D45),
+                    ),
+                    title: Text(
+                      "Last Daily Maintenance",
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      reminderProvider.lastResetDate,
+                      style: GoogleFonts.inter(),
+                    ),
+                    trailing: TextButton.icon(
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text("Check"),
+                      onPressed: () async {
+                        await reminderProvider.checkDailyReset();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Maintenance check completed"),
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

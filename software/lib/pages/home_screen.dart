@@ -137,7 +137,7 @@ class _CompartmentCardState extends State<CompartmentCard>
       case 'active':
         return const Color(
           0xFF1F4D45,
-        ).withOpacity(0.1); // soft opacity primary green
+        ).withValues(alpha: 0.1); // soft opacity primary green
       default:
         return const Color(0xFFE8ECEB);
     }
@@ -158,7 +158,7 @@ class _CompartmentCardState extends State<CompartmentCard>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),

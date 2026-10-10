@@ -149,7 +149,7 @@ class _AddReminderPageState extends State<AddReminderPage>
     showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -372,7 +372,7 @@ class _SectionCardState extends State<_SectionCard> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -522,7 +522,9 @@ class _SectionCardState extends State<_SectionCard> {
                       });
                     },
                     activeThumbColor: const Color(0xFFF5C842),
-                    activeTrackColor: const Color(0xFFF5C842).withOpacity(0.5),
+                    activeTrackColor: const Color(
+                      0xFFF5C842,
+                    ).withValues(alpha: 0.5),
                   ),
                   const SizedBox(width: 8),
                   Text(

@@ -84,7 +84,13 @@ class RemindersPage extends StatelessWidget {
       "Sunday",
     ];
 
-    final int todayIndex = DateTime.now().weekday - 1; // 0 for Monday
+    final now = DateTime.now();
+    final int todayIndex = now.weekday - 1; // 0 for Monday
+    final mondayThisWeek = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: todayIndex));
     final List<Widget> sections = [];
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -92,6 +98,7 @@ class RemindersPage extends StatelessWidget {
       final dayName = days[i];
       final dayReminders = grouped[i] ?? [];
       final isToday = i == todayIndex;
+      final dateForDay = mondayThisWeek.add(Duration(days: i));
 
       sections.add(
         Column(
@@ -162,7 +169,7 @@ class RemindersPage extends StatelessWidget {
               ...dayReminders.map(
                 (r) => Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
-                  child: ReminderCard(reminder: r),
+                  child: ReminderCard(reminder: r, occurrenceDate: dateForDay),
                 ),
               ),
             if (dayReminders.isNotEmpty) const SizedBox(height: 8),

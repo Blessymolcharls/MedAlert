@@ -14,17 +14,25 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
 
   Future<void> init() async {
+    if (_isInitialized) return;
+
     // 1. Initialize timezones for scheduled notifications
     tz.initializeTimeZones();
     try {
-      final String timeZoneName = (await FlutterTimezone.getLocalTimezone()).identifier;
+      final String timeZoneName =
+          (await FlutterTimezone.getLocalTimezone()).identifier;
       tz.setLocalLocation(tz.getLocation(timeZoneName));
     } catch (e) {
-      print('Could not get local timezone: $e');
+      debugPrint(
+        'NotificationService: Could not get local timezone, falling back to UTC: $e',
+      );
+      try {
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      } catch (_) {}
     }
-
 
     // 2. Setup initialization settings
     const AndroidInitializationSettings androidSettings =
@@ -45,7 +53,7 @@ class NotificationService {
     await _plugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification click route here if needed
+        // Handle notification click route if needed
       },
     );
 
@@ -58,23 +66,36 @@ class NotificationService {
 
       // Create high importance channel
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'medalert_high_channel', // id
-        'MedAlert Reminders', // name
+        'medalert_high_channel',
+        'MedAlert Reminders',
         description: 'High priority medicine intake reminders',
-        importance: Importance.max, // Requires max for heads-up behavior
+        importance: Importance.max,
       );
 
       await androidImplementation?.createNotificationChannel(channel);
 
-      // Request Android 13 Notification Permissions
-      await androidImplementation?.requestNotificationsPermission();
+      // Request Android 13+ Notification Permissions
+      try {
+        await androidImplementation?.requestNotificationsPermission();
+      } catch (e) {
+        debugPrint(
+          'NotificationService: requestNotificationsPermission error: $e',
+        );
+      }
 
       // Request Exact Alarm permissions (Android 12/13+)
-      await androidImplementation?.requestExactAlarmsPermission();
+      try {
+        await androidImplementation?.requestExactAlarmsPermission();
+      } catch (e) {
+        debugPrint(
+          'NotificationService: requestExactAlarmsPermission error: $e',
+        );
+      }
     }
+
+    _isInitialized = true;
   }
 
-  // ============== EXAMPLE: INSTANT NOTIFICATION ==============
   Future<void> showInstantNotification({
     required int id,
     required String title,
@@ -93,19 +114,25 @@ class NotificationService {
     await _plugin.show(id, title, body, details);
   }
 
-  // ============== EXAMPLE: SINGLE SCHEDULED NOTIFICATION ==============
-  Future<void> scheduleSingleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      const NotificationDetails(
+  Future<void> scheduleWeeklyNotification(Reminder reminder) async {
+    for (int dayIndex in reminder.selectedDays) {
+      final int flutterWeekdayMatch = dayIndex + 1;
+
+      final tz.TZDateTime scheduledTime = _nextInstanceOfWeekday(
+        flutterWeekdayMatch,
+        reminder.time,
+      );
+
+      final int notifId = _generateNotificationId(reminder.id, dayIndex);
+      final String foodText = reminder.isAfterFood
+          ? "After Food"
+          : "Before Food";
+      final formattedTimeStr = _formatTimeOfDay(reminder.time);
+
+      const title = "Upcoming Medicine Reminder";
+      final body = "${reminder.name} at $formattedTimeStr ($foodText)";
+
+      const notificationDetails = NotificationDetails(
         android: AndroidNotificationDetails(
           'medalert_high_channel',
           'MedAlert Reminders',
@@ -114,79 +141,63 @@ class NotificationService {
           priority: Priority.high,
         ),
         iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-  }
-
-  // ============== IMPLEMENTATION: WEEKLY REMINDER ==============
-  Future<void> scheduleWeeklyNotification(Reminder reminder) async {
-    for (int dayIndex in reminder.selectedDays) {
-      int flutterWeekdayMatch = dayIndex + 1;
-
-      // Compute the absolute next date/time matching this weekday
-      tz.TZDateTime scheduledTime = _nextInstanceOfWeekday(
-        flutterWeekdayMatch,
-        reminder.time,
       );
 
-      int notifId = _generateNotificationId(reminder.id, dayIndex);
-      final String foodText = reminder.isAfterFood
-          ? "After Food"
-          : "Before Food";
-      final formattedTimeStr = _formatTimeOfDay(reminder.time);
-
-      final title = "Upcoming Medicine Reminder";
-      final body = "${reminder.name} at $formattedTimeStr ($foodText)";
-
-      await _plugin.zonedSchedule(
-        notifId,
-        title,
-        body,
-        scheduledTime,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'medalert_high_channel', // Match channel id perfectly
-            'MedAlert Reminders',
-            channelDescription: 'High priority medicine intake reminders',
-            importance: Importance.max,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      );
+      // Attempt exact alarm, fallback to inexact if restricted
+      try {
+        await _plugin.zonedSchedule(
+          notifId,
+          title,
+          body,
+          scheduledTime,
+          notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        );
+      } catch (e) {
+        debugPrint(
+          'NotificationService: exactAllowWhileIdle failed, falling back to inexact: $e',
+        );
+        try {
+          await _plugin.zonedSchedule(
+            notifId,
+            title,
+            body,
+            scheduledTime,
+            notificationDetails,
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          );
+        } catch (e2) {
+          debugPrint('NotificationService: fallback zonedSchedule error: $e2');
+        }
+      }
     }
   }
 
-  // Timezone helper to find the exact next matching day/time
+  /// Calculates the next occurrence of a weekday and time in local timezone.
   tz.TZDateTime _nextInstanceOfWeekday(int weekday, TimeOfDay time) {
-    tz.TZDateTime scheduledDate = _nextInstanceOfTime(time);
-    while (scheduledDate.weekday != weekday) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
-    return scheduledDate;
-  }
-
-  // Timezone helper to check if time has already passed today
-  tz.TZDateTime _nextInstanceOfTime(TimeOfDay time) {
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    int daysToAdd = (weekday - now.weekday) % 7;
+    if (daysToAdd < 0) daysToAdd += 7;
+
     tz.TZDateTime scheduledDate = tz.TZDateTime(
       tz.local,
       now.year,
       now.month,
-      now.day,
+      now.day + daysToAdd,
       time.hour,
       time.minute,
     );
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+
+    if (daysToAdd == 0 && scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 7));
     }
+
     return scheduledDate;
   }
 
@@ -198,7 +209,6 @@ class NotificationService {
   }
 
   int _generateNotificationId(String reminderId, int dayIndex) {
-    // Ensuring positive 32-bit integer for ID to satisfy Android requirements
     return (reminderId.hashCode + dayIndex).abs() % 2147483647;
   }
 
@@ -212,6 +222,6 @@ class NotificationService {
     await _plugin.cancelAll();
   }
 
-  // Legacy stub to avoid breaking backwards compatibility constraints with other files
+  // Legacy stubs to avoid breaking other files
   Future<void> scheduleNotification(Compartment compartment) async {}
 }

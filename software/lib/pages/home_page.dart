@@ -56,24 +56,16 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         child: Consumer<ReminderProvider>(
           builder: (context, provider, child) {
-            final allReminders = provider.reminders;
-            final todayIndex =
-                DateTime.now().weekday - 1; // 0 for Monday, 6 for Sunday
-
-            final reminders = allReminders
-                .where((r) => r.selectedDays.contains(todayIndex))
-                .toList();
-            reminders.sort((a, b) {
-              if (a.time.hour != b.time.hour) {
-                return a.time.hour.compareTo(b.time.hour);
-              }
-              return a.time.minute.compareTo(b.time.minute);
-            });
-
-            final totalCount = reminders.length;
-            final takenCount = reminders.where((r) => r.isTakenToday).length;
-            final missedCount = reminders.where((r) => r.isMissedToday).length;
-            final pendingCount = totalCount - takenCount - missedCount;
+            final now = DateTime.now();
+            final reminders = provider.getTodayReminders(referenceDate: now);
+            final totalCount = provider.getTodayTotalCount(referenceDate: now);
+            final takenCount = provider.getTodayTakenCount(referenceDate: now);
+            final pendingCount = provider.getTodayPendingCount(
+              referenceDate: now,
+            );
+            final missedCount = provider.getTodayMissedCount(
+              referenceDate: now,
+            );
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,18 +138,17 @@ class _HomePageState extends State<HomePage> {
                             horizontal: 20.0,
                             vertical: 8.0,
                           ),
-                          itemCount:
-                              reminders.length +
-                              1, // +1 for the bottom padding spacer
+                          itemCount: reminders.length + 1,
                           separatorBuilder: (context, index) =>
                               const SizedBox(height: 16),
                           itemBuilder: (context, index) {
                             if (index == reminders.length) {
-                              return const SizedBox(
-                                height: 80,
-                              ); // Padding to avoid FAB overlap
+                              return const SizedBox(height: 80);
                             }
-                            return ReminderCard(reminder: reminders[index]);
+                            return ReminderCard(
+                              reminder: reminders[index],
+                              occurrenceDate: now,
+                            );
                           },
                         ),
                 ),

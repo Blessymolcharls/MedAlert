@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/reminder.dart';
+import '../models/dose_occurrence.dart';
 import '../providers/reminder_provider.dart';
 import 'confirm_dialog.dart';
-// import removed
 
 class ReminderCard extends StatefulWidget {
   final Reminder reminder;
+  final DateTime? occurrenceDate;
 
-  const ReminderCard({super.key, required this.reminder});
+  const ReminderCard({super.key, required this.reminder, this.occurrenceDate});
 
   @override
   State<ReminderCard> createState() => _ReminderCardState();
@@ -19,6 +20,8 @@ class _ReminderCardState extends State<ReminderCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
+
+  DateTime get _effectiveDate => widget.occurrenceDate ?? DateTime.now();
 
   @override
   void initState() {
@@ -32,11 +35,23 @@ class _ReminderCardState extends State<ReminderCard>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _manageAnimation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _manageAnimation();
+    });
   }
 
   void _manageAnimation() {
     final now = DateTime.now();
+    final isToday =
+        DoseOccurrence.toDateKey(_effectiveDate) ==
+        DoseOccurrence.toDateKey(now);
+
+    if (!isToday) {
+      _controller.value = 1.0;
+      _controller.stop();
+      return;
+    }
+
     final scheduled = DateTime(
       now.year,
       now.month,
@@ -45,12 +60,12 @@ class _ReminderCardState extends State<ReminderCard>
       widget.reminder.time.minute,
     );
     final diff = now.difference(scheduled).inMinutes;
-    final isTooLate = diff > 15;
-    final displayAsTaken = widget.reminder.isTakenToday;
-    final displayAsMissed =
-        widget.reminder.isMissedToday || (!displayAsTaken && isTooLate);
 
-    if (!displayAsTaken && !displayAsMissed && diff >= 0 && diff <= 15) {
+    final provider = Provider.of<ReminderProvider>(context, listen: false);
+    final status = provider.getDoseStatus(widget.reminder, _effectiveDate);
+
+    if (status == DoseStatus.pending ||
+        (diff >= 0 && diff <= 15 && status != DoseStatus.taken)) {
       if (!_controller.isAnimating) {
         _controller.repeat(reverse: true);
       }
@@ -83,7 +98,7 @@ class _ReminderCardState extends State<ReminderCard>
         Provider.of<ReminderProvider>(
           context,
           listen: false,
-        ).confirmIntake(widget.reminder.id);
+        ).confirmIntake(widget.reminder.id, date: _effectiveDate);
       }
     }
   }
@@ -144,9 +159,7 @@ class _ReminderCardState extends State<ReminderCard>
               ),
               child: Text(
                 "Delete",
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -174,25 +187,18 @@ class _ReminderCardState extends State<ReminderCard>
     final t = Theme.of(context);
     final isDark = t.brightness == Brightness.dark;
 
-    final now = DateTime.now();
-    final scheduled = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      widget.reminder.time.hour,
-      widget.reminder.time.minute,
-    );
-    final diff = now.difference(scheduled).inMinutes;
-    final isTooEarly = diff < 0;
-    final isTooLate = diff > 15;
+    final provider = Provider.of<ReminderProvider>(context);
+    final status = provider.getDoseStatus(widget.reminder, _effectiveDate);
+    final takenAt = provider.getDoseTakenAt(widget.reminder.id, _effectiveDate);
 
-    final displayAsTaken = widget.reminder.isTakenToday;
-    final displayAsMissed =
-        widget.reminder.isMissedToday || (!displayAsTaken && isTooLate);
+    final displayAsTaken = status == DoseStatus.taken;
+    final displayAsMissed = status == DoseStatus.missed;
+    final isPending = status == DoseStatus.pending;
+    final isUpcoming = status == DoseStatus.upcoming;
 
     Color leftAccent = const Color(0xFF1F4D45);
     Color backgroundColor = t.cardColor;
-    String statusText = "Upcoming";
+    String statusText = status.displayName;
     Color statusColor = Colors.orange.withValues(alpha: 0.15);
     Color statusTextColor = Colors.orange.shade800;
 
@@ -212,18 +218,23 @@ class _ReminderCardState extends State<ReminderCard>
       statusText = "Missed";
       statusColor = Colors.red.withValues(alpha: 0.2);
       statusTextColor = Colors.red.shade800;
+    } else if (isPending) {
+      leftAccent = const Color(0xFF1F4D45);
+      statusText = "Pending";
+      statusColor = Colors.orange.withValues(alpha: 0.25);
+      statusTextColor = Colors.orange.shade900;
     }
 
-    final formattedTime = widget.reminder.lastTakenAt != null
-        ? TimeOfDay.fromDateTime(widget.reminder.lastTakenAt!).format(context)
+    final formattedTakenTime = takenAt != null
+        ? TimeOfDay.fromDateTime(takenAt).format(context)
         : "";
 
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
         return Opacity(
-          opacity: (isTooEarly && !displayAsTaken && !displayAsMissed)
-              ? 0.6
+          opacity: (isUpcoming && !displayAsTaken && !displayAsMissed)
+              ? 0.75
               : _animation.value,
           child: Container(
             decoration: BoxDecoration(
@@ -391,78 +402,73 @@ class _ReminderCardState extends State<ReminderCard>
                                   ),
                                 ),
                                 if (displayAsTaken &&
-                                    widget.reminder.lastTakenAt != null)
+                                    formattedTakenTime.isNotEmpty)
                                   Text(
-                                    "Taken at $formattedTime",
+                                    "Taken at $formattedTakenTime",
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
                                       color: Colors.green.shade700,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
-                                if (!displayAsTaken && !displayAsMissed)
-                                  if (isTooEarly)
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              "Confirmation allowed only at scheduled time",
-                                            ),
-                                            backgroundColor: Colors.orange,
-                                          ),
-                                        );
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.grey.shade400,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        minimumSize: Size.zero,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
+                                if (isPending)
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        _showConfirmDialog(context),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
                                       ),
-                                      child: Text(
-                                        "Not Yet",
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    )
-                                  else
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          _showConfirmDialog(context),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        minimumSize: Size.zero,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        "Confirm Intake",
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                      minimumSize: Size.zero,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
+                                    child: Text(
+                                      "Confirm Intake",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                else if (isUpcoming)
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            "Confirmation allowed only at scheduled time",
+                                          ),
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.grey.shade400,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "Not Yet",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ],
