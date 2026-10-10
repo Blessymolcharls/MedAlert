@@ -88,6 +88,87 @@ class _ReminderCardState extends State<ReminderCard>
     }
   }
 
+  void _showDeleteDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final isDarkTheme = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.delete_outline, color: Colors.red.shade400, size: 24),
+              const SizedBox(width: 8),
+              Text(
+                "Delete Task",
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            "Are you sure you want to delete '${widget.reminder.name}'?",
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: isDarkTheme ? Colors.grey.shade300 : Colors.grey.shade800,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(
+                "Cancel",
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                "Delete",
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && context.mounted) {
+      Provider.of<ReminderProvider>(
+        context,
+        listen: false,
+      ).removeReminder(widget.reminder.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Deleted reminder for ${widget.reminder.name}"),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -221,15 +302,40 @@ class _ReminderCardState extends State<ReminderCard>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  widget.reminder.time.format(context),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black87,
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      widget.reminder.time.format(context),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      key: Key(
+                                        'delete_reminder_${widget.reminder.id}',
+                                      ),
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                      ),
+                                      color: isDark
+                                          ? Colors.red.shade300
+                                          : Colors.red.shade400,
+                                      tooltip: "Delete task",
+                                      padding: const EdgeInsets.all(4),
+                                      constraints: const BoxConstraints(),
+                                      splashRadius: 18,
+                                      onPressed: () =>
+                                          _showDeleteDialog(context),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

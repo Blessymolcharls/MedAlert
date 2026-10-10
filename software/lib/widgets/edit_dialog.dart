@@ -104,6 +104,16 @@ class _EditDialogState extends State<EditDialog> {
         ),
       ),
       actions: [
+        if (widget.compartment.medicineName.isNotEmpty)
+          TextButton(
+            onPressed: () {
+              _medicineController.clear();
+              _dosageController.clear();
+              _save();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete / Clear'),
+          ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
