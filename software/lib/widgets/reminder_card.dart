@@ -197,7 +197,8 @@ class _ReminderCardState extends State<ReminderCard>
     final isUpcoming = status == DoseStatus.upcoming;
 
     Color leftAccent = const Color(0xFF1F4D45);
-    Color backgroundColor = t.cardColor;
+    Color backgroundColor =
+        isDark ? t.cardColor : const Color(0xFFFDF0F2);
     String statusText = status.displayName;
     Color statusColor = Colors.orange.withValues(alpha: 0.15);
     Color statusTextColor = Colors.orange.shade800;

@@ -4,7 +4,8 @@ enum DoseStatus {
   upcoming,
   pending,
   taken,
-  missed;
+  missed,
+  skipped;
 
   String get displayName {
     switch (this) {
@@ -16,6 +17,8 @@ enum DoseStatus {
         return 'Taken';
       case DoseStatus.missed:
         return 'Missed';
+      case DoseStatus.skipped:
+        return 'Skipped';
     }
   }
 }
@@ -27,6 +30,8 @@ class DoseOccurrence {
   bool isTaken;
   DateTime? takenAt;
   bool isExplicitlyMissed;
+  bool isSkipped;
+  String? skipReason;
 
   DoseOccurrence({
     required this.reminderId,
@@ -34,6 +39,8 @@ class DoseOccurrence {
     this.isTaken = false,
     this.takenAt,
     this.isExplicitlyMissed = false,
+    this.isSkipped = false,
+    this.skipReason,
   });
 
   String get id => '${reminderId}_$dateString';
@@ -49,12 +56,16 @@ class DoseOccurrence {
   ///
   /// Status transitions:
   /// - [DoseStatus.taken]: Marked taken by user action.
+  /// - [DoseStatus.skipped]: Marked skipped by user action.
   /// - [DoseStatus.missed]: If date is before today and not taken, or today past 15-min window without intake.
   /// - [DoseStatus.pending]: Today between scheduled time and scheduled time + 15 mins.
   /// - [DoseStatus.upcoming]: Scheduled in the future (future date or later today).
   DoseStatus calculateStatus(Reminder reminder, {DateTime? referenceTime}) {
     if (isTaken) {
       return DoseStatus.taken;
+    }
+    if (isSkipped) {
+      return DoseStatus.skipped;
     }
 
     final now = referenceTime ?? DateTime.now();
@@ -97,6 +108,8 @@ class DoseOccurrence {
       'isTaken': isTaken,
       'takenAt': takenAt?.toIso8601String(),
       'isExplicitlyMissed': isExplicitlyMissed,
+      'isSkipped': isSkipped,
+      'skipReason': skipReason,
     };
   }
 
@@ -109,6 +122,8 @@ class DoseOccurrence {
           ? DateTime.tryParse(map['takenAt'] as String)
           : null,
       isExplicitlyMissed: map['isExplicitlyMissed'] as bool? ?? false,
+      isSkipped: map['isSkipped'] as bool? ?? false,
+      skipReason: map['skipReason'] as String?,
     );
   }
 }

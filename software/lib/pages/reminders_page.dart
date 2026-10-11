@@ -1,183 +1,240 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/reminder_provider.dart';
-import '../models/reminder.dart';
-import '../widgets/reminder_card.dart';
+import '../utils/calendar_utils.dart';
+import '../widgets/calendar/calendar_header.dart';
+import '../widgets/calendar/calendar_view_selector.dart';
+import '../widgets/calendar/month_calendar_grid.dart';
+import '../widgets/calendar/week_date_selector.dart';
+import '../widgets/calendar/daily_dose_summary.dart';
+import '../widgets/calendar/day_medication_agenda.dart';
+import '../widgets/calendar/medication_timeline_card.dart';
+import '../widgets/calendar/empty_schedule_state.dart';
 
-class RemindersPage extends StatelessWidget {
-  const RemindersPage({super.key});
+class RemindersPage extends StatefulWidget {
+  final CalendarViewType initialView;
+  final DateTime? initialDate;
+
+  const RemindersPage({
+    super.key,
+    this.initialView = CalendarViewType.month,
+    this.initialDate,
+  });
+
+  @override
+  State<RemindersPage> createState() => _RemindersPageState();
+}
+
+class _RemindersPageState extends State<RemindersPage> {
+  late CalendarViewType _currentView;
+  late DateTime _selectedDate;
+  late DateTime _displayMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentView = widget.initialView;
+    final now = widget.initialDate ?? DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day);
+    _displayMonth = DateTime(now.year, now.month, 1);
+  }
+
+  void _onViewChanged(CalendarViewType newView) {
+    setState(() {
+      _currentView = newView;
+      _displayMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    });
+  }
+
+  void _onDateSelected(DateTime date) {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+      _displayMonth = DateTime(date.year, date.month, 1);
+    });
+  }
+
+  void _onPrevious() {
+    setState(() {
+      switch (_currentView) {
+        case CalendarViewType.month:
+          _displayMonth = CalendarUtils.previousMonth(_displayMonth);
+          final maxDays = CalendarUtils.daysInMonth(
+            _displayMonth.year,
+            _displayMonth.month,
+          );
+          final day = _selectedDate.day > maxDays ? maxDays : _selectedDate.day;
+          _selectedDate = DateTime(_displayMonth.year, _displayMonth.month, day);
+          break;
+        case CalendarViewType.week:
+          _selectedDate = CalendarUtils.previousWeek(_selectedDate);
+          _displayMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+          break;
+        case CalendarViewType.day:
+          _selectedDate = CalendarUtils.previousDay(_selectedDate);
+          _displayMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+          break;
+      }
+    });
+  }
+
+  void _onNext() {
+    setState(() {
+      switch (_currentView) {
+        case CalendarViewType.month:
+          _displayMonth = CalendarUtils.nextMonth(_displayMonth);
+          final maxDays = CalendarUtils.daysInMonth(
+            _displayMonth.year,
+            _displayMonth.month,
+          );
+          final day = _selectedDate.day > maxDays ? maxDays : _selectedDate.day;
+          _selectedDate = DateTime(_displayMonth.year, _displayMonth.month, day);
+          break;
+        case CalendarViewType.week:
+          _selectedDate = CalendarUtils.nextWeek(_selectedDate);
+          _displayMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+          break;
+        case CalendarViewType.day:
+          _selectedDate = CalendarUtils.nextDay(_selectedDate);
+          _displayMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+          break;
+      }
+    });
+  }
+
+  void _onToday() {
+    final now = DateTime.now();
+    setState(() {
+      _selectedDate = DateTime(now.year, now.month, now.day);
+      _displayMonth = DateTime(now.year, now.month, 1);
+    });
+  }
+
+  String _getPeriodTitle() {
+    switch (_currentView) {
+      case CalendarViewType.month:
+        return CalendarUtils.formatMonthYear(_displayMonth);
+      case CalendarViewType.week:
+        return CalendarUtils.formatWeekRange(_selectedDate);
+      case CalendarViewType.day:
+        return CalendarUtils.formatFullDateWithYear(_selectedDate);
+    }
+  }
+
+  bool _isCurrentPeriod() {
+    final now = DateTime.now();
+    switch (_currentView) {
+      case CalendarViewType.month:
+        return _displayMonth.year == now.year &&
+            _displayMonth.month == now.month;
+      case CalendarViewType.week:
+        final mondaySelected = CalendarUtils.getMondayOfWeek(_selectedDate);
+        final mondayNow = CalendarUtils.getMondayOfWeek(now);
+        return CalendarUtils.isSameDay(mondaySelected, mondayNow);
+      case CalendarViewType.day:
+        return CalendarUtils.isSameDay(_selectedDate, now);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ReminderProvider>(
-      builder: (context, provider, child) {
-        final grouped = provider.getRemindersGroupedByDay();
-        final isEmpty = provider.reminders.isEmpty;
+    return Scaffold(
+      backgroundColor: Colors.transparent, // Inherited from MainShell
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header & Navigation Toolbar
+              CalendarHeader(
+                periodTitle: _getPeriodTitle(),
+                onPrevious: _onPrevious,
+                onNext: _onNext,
+                onToday: _onToday,
+                currentView: _currentView,
+                onViewChanged: _onViewChanged,
+                isCurrentPeriod: _isCurrentPeriod(),
+              ),
+              const SizedBox(height: 16),
 
-        return Scaffold(
-          backgroundColor: Colors.transparent, // inherited from shell
-          body: SafeArea(
-            child: isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.medication_outlined,
-                          size: 80,
-                          color: Colors.green.shade100,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "No reminders added yet",
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF1F4D45),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 20,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Weekly Planner",
-                          style: GoogleFonts.inter(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color:
-                                Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white
-                                : const Color(0xFF1F4D45),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        ..._buildWeeklySections(context, grouped),
-                      ],
-                    ),
-                  ),
+              // Active View Body
+              if (_currentView == CalendarViewType.month)
+                _buildMonthView(context)
+              else if (_currentView == CalendarViewType.week)
+                _buildWeekView(context)
+              else
+                DayMedicationAgenda(selectedDate: _selectedDate),
+
+              const SizedBox(height: 32),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  List<Widget> _buildWeeklySections(
-    BuildContext context,
-    Map<int, List<Reminder>> grouped,
-  ) {
-    final List<String> days = [
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-      "Sunday",
-    ];
-
-    final now = DateTime.now();
-    final int todayIndex = now.weekday - 1; // 0 for Monday
-    final mondayThisWeek = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: todayIndex));
-    final List<Widget> sections = [];
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    for (int i = 0; i < 7; i++) {
-      final dayName = days[i];
-      final dayReminders = grouped[i] ?? [];
-      final isToday = i == todayIndex;
-      final dateForDay = mondayThisWeek.add(Duration(days: i));
-
-      sections.add(
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (isToday)
-                  Container(
-                    width: 4,
-                    height: 20,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                Text(
-                  dayName,
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isToday
-                        ? Colors.green.shade700
-                        : (isDark
-                              ? Colors.grey.shade300
-                              : const Color(0xFF1F4D45)),
-                  ),
-                ),
-                if (isToday)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        "Today",
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green.shade800,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (dayReminders.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24.0, left: 12.0),
-                child: Text(
-                  "No reminders",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.grey.shade500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              )
-            else
-              ...dayReminders.map(
-                (r) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: ReminderCard(reminder: r, occurrenceDate: dateForDay),
-                ),
-              ),
-            if (dayReminders.isNotEmpty) const SizedBox(height: 8),
-          ],
+  Widget _buildMonthView(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Monthly Calendar Grid
+        MonthCalendarGrid(
+          displayMonth: _displayMonth,
+          selectedDate: _selectedDate,
+          onDateSelected: _onDateSelected,
         ),
-      );
+        const SizedBox(height: 20),
+
+        // Selected-Day Summary
+        DailyDoseSummary(selectedDate: _selectedDate),
+        const SizedBox(height: 14),
+
+        // Selected Day Medication Timeline
+        _buildMedicationTimeline(context),
+      ],
+    );
+  }
+
+  Widget _buildWeekView(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 7-Day Date Selector
+        WeekDateSelector(
+          selectedDate: _selectedDate,
+          onDateSelected: _onDateSelected,
+        ),
+        const SizedBox(height: 20),
+
+        // Selected-Day Summary
+        DailyDoseSummary(selectedDate: _selectedDate),
+        const SizedBox(height: 14),
+
+        // Selected Day Medication Timeline
+        _buildMedicationTimeline(context),
+      ],
+    );
+  }
+
+  Widget _buildMedicationTimeline(BuildContext context) {
+    final provider = Provider.of<ReminderProvider>(context);
+    final reminders = provider.getRemindersForDate(_selectedDate);
+
+    if (reminders.isEmpty) {
+      return EmptyScheduleState(date: _selectedDate);
     }
 
-    return sections;
+    return Column(
+      children: reminders.map((r) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12.0),
+          child: MedicationTimelineCard(
+            key: Key('timeline_card_${r.id}_${_selectedDate.day}'),
+            reminder: r,
+            occurrenceDate: _selectedDate,
+          ),
+        );
+      }).toList(),
+    );
   }
 }
