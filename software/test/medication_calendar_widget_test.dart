@@ -6,7 +6,10 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:medalert/models/reminder.dart';
 import 'package:medalert/providers/reminder_provider.dart';
+import 'package:medalert/providers/ble_provider.dart';
+import 'package:medalert/providers/theme_provider.dart';
 import 'package:medalert/pages/reminders_page.dart';
+import 'package:medalert/pages/main_shell.dart';
 import 'package:medalert/widgets/calendar/calendar_view_selector.dart';
 
 void main() {
@@ -181,6 +184,161 @@ void main() {
 
       // Returns to current month
       expect(find.text('October 2026'), findsOneWidget);
+    });
+
+    testWidgets('Tapping a medication card opens MedicationDetailsDialog with details', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final rem = Reminder(
+        id: 'r_tap_detail',
+        name: 'Atorvastatin',
+        dosage: '20mg',
+        time: const TimeOfDay(hour: 20, minute: 0),
+        isAfterFood: true,
+        section: 'Night',
+        selectedDays: [0], // Monday
+        createdAt: DateTime(2026, 10, 1),
+      );
+      provider.addReminder(rem);
+
+      await tester.pumpWidget(createTestApp(initialView: CalendarViewType.month));
+      await tester.pumpAndSettle();
+
+      // Tap anywhere on Atorvastatin card body
+      await tester.tap(find.text('Atorvastatin'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Medication details dialog should open
+      expect(find.text('Dosage'), findsOneWidget);
+      expect(find.text('20mg'), findsWidgets);
+      expect(find.text('Food Instruction'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+
+      // Close dialog
+      await tester.tap(find.text('Close'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Close'), findsNothing);
+    });
+
+    testWidgets('Renders responsively on narrow 320px screen without overflow', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final rem = Reminder(
+        id: 'r_narrow',
+        name: 'Aspirin Cardio',
+        dosage: '100mg',
+        time: const TimeOfDay(hour: 9, minute: 0),
+        isAfterFood: true,
+        section: 'Morning',
+        selectedDays: [0, 1, 2, 3, 4, 5, 6],
+        createdAt: DateTime(2026, 10, 1),
+      );
+      provider.addReminder(rem);
+
+      // 1. Month View on 320px
+      await tester.pumpWidget(createTestApp(initialView: CalendarViewType.month));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // 2. Week View on 320px
+      await tester.tap(find.text('Week'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // 3. Day View on 320px
+      await tester.tap(find.text('Day'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Displays error feedback banner and allows dismissing it', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(createTestApp(initialView: CalendarViewType.month));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('calendar_error_banner')), findsNothing);
+
+      // Trigger an error state
+      provider.setError('Database connection temporarily unavailable');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('calendar_error_banner')), findsOneWidget);
+      expect(find.text('Database connection temporarily unavailable'), findsOneWidget);
+
+      // Dismiss the error banner
+      await tester.tap(find.byKey(const Key('calendar_error_dismiss')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('calendar_error_banner')), findsNothing);
+      expect(provider.errorMessage, isNull);
+    });
+
+    testWidgets('MainShell bottom navigation supports tab switching and Android back navigation', (
+      WidgetTester tester,
+    ) async {
+      final bleProvider = BleProvider();
+      final themeProvider = ThemeProvider();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<ReminderProvider>.value(value: provider),
+              ChangeNotifierProvider<BleProvider>.value(value: bleProvider),
+              ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
+            ],
+            child: const MainShell(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Starts on Home tab
+      expect(find.text('+ Add Reminder'), findsOneWidget);
+
+      // Switch to Reminders tab
+      await tester.tap(find.byIcon(Icons.notifications_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('Medication Calendar'), findsOneWidget);
+
+      // Trigger Android system back navigation
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // Returns to Home tab
+      expect(find.text('+ Add Reminder'), findsOneWidget);
+
+      // Switch to Settings tab
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+      expect(find.text('Dark Mode'), findsOneWidget);
+
+      // Trigger Android system back navigation again
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      // Returns to Home tab
+      expect(find.text('+ Add Reminder'), findsOneWidget);
+
+      bleProvider.dispose();
+      themeProvider.dispose();
     });
   });
 }

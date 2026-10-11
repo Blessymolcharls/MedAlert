@@ -164,39 +164,62 @@ class MonthCalendarGrid extends StatelessWidget {
       textColor = const Color(0xFF1F4D45);
     }
 
-    return GestureDetector(
-      key: Key('calendar_day_${date.year}_${date.month}_${date.day}'),
-      onTap: () => onDateSelected(date),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 48,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: cellBg,
+    final semanticLabel = '$dayNumber ${CalendarUtils.formatMonthYear(displayMonth)}'
+        '${isToday ? ", today" : ""}'
+        '${doseStatuses.isEmpty ? ", no doses scheduled" : ", ${doseStatuses.length} doses scheduled"}';
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: Key('calendar_day_${date.year}_${date.month}_${date.day}'),
+          onTap: () => onDateSelected(date),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isToday && !isSelected
-                ? const Color(0xFF1F4D45)
-                : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$dayNumber',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: isSelected || isToday
-                    ? FontWeight.bold
-                    : FontWeight.w500,
-                color: textColor,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 48,
+            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+            decoration: BoxDecoration(
+              color: cellBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isToday && !isSelected
+                    ? const Color(0xFF1F4D45)
+                    : (isSelected
+                        ? const Color(0xFF1F4D45)
+                        : Colors.transparent),
+                width: isToday && !isSelected ? 1.5 : 1.0,
               ),
+              boxShadow: [
+                if (isSelected && !isDark)
+                  BoxShadow(
+                    color: const Color(0xFF1F4D45).withValues(alpha: 0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+              ],
             ),
-            const SizedBox(height: 3),
-            _buildDoseIndicators(doseStatuses, isSelected),
-          ],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$dayNumber',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: isSelected || isToday
+                        ? FontWeight.bold
+                        : FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                _buildDoseIndicators(doseStatuses, isSelected),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -204,7 +227,7 @@ class MonthCalendarGrid extends StatelessWidget {
 
   /// Compact indicators for scheduled doses.
   /// Shows individual dots (up to 3) colored by dose state,
-  /// plus a "+" indicator if more than 3 doses are scheduled.
+  /// plus a overflow dot if more than 3 doses are scheduled.
   Widget _buildDoseIndicators(List<DoseStatus> statuses, bool isSelected) {
     if (statuses.isEmpty) {
       return const SizedBox(height: 5);

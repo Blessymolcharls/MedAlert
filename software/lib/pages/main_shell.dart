@@ -29,7 +29,16 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFFFAF7F2),
         elevation: 0,
@@ -90,6 +99,7 @@ class _MainShellState extends State<MainShell> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

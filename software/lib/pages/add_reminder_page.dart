@@ -5,7 +5,9 @@ import '../models/reminder.dart';
 import '../providers/reminder_provider.dart';
 
 class AddReminderPage extends StatefulWidget {
-  const AddReminderPage({super.key});
+  final DateTime? initialDate;
+
+  const AddReminderPage({super.key, this.initialDate});
 
   @override
   State<AddReminderPage> createState() => _AddReminderPageState();
@@ -16,11 +18,18 @@ class _AddReminderPageState extends State<AddReminderPage>
   final List<String> _days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   late List<bool> _selectedDays;
   late AnimationController _animController;
+  bool _isOneTime = false;
+  late DateTime _oneTimeDate;
 
   @override
   void initState() {
     super.initState();
-    _selectedDays = List.generate(7, (_) => false);
+    final init = widget.initialDate ?? DateTime.now();
+    _oneTimeDate = DateTime(init.year, init.month, init.day);
+    _selectedDays = List.generate(
+      7,
+      (i) => widget.initialDate != null ? i == (init.weekday - 1) : false,
+    );
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -40,20 +49,24 @@ class _AddReminderPageState extends State<AddReminderPage>
   Future<void> _saveReminder() async {
     // Collect selected days indices
     final List<int> selectedDayIndices = [];
-    for (int i = 0; i < _selectedDays.length; i++) {
-      if (_selectedDays[i]) {
-        selectedDayIndices.add(i);
+    if (_isOneTime) {
+      selectedDayIndices.add((_oneTimeDate.weekday - 1) % 7);
+    } else {
+      for (int i = 0; i < _selectedDays.length; i++) {
+        if (_selectedDays[i]) {
+          selectedDayIndices.add(i);
+        }
       }
-    }
 
-    if (selectedDayIndices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please select at least one day"),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+      if (selectedDayIndices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Please select at least one day"),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
     }
 
     // Try to get data from cards
@@ -109,6 +122,7 @@ class _AddReminderPageState extends State<AddReminderPage>
           isTakenToday: false,
           isMissedToday: false,
           selectedDays: selectedDayIndices,
+          oneTimeDate: _isOneTime ? _oneTimeDate : null,
           createdAt: DateTime.now(),
         );
         Provider.of<ReminderProvider>(
@@ -239,52 +253,172 @@ class _AddReminderPageState extends State<AddReminderPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Select Days",
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF1F4D45),
-                ),
+              // Schedule Type Toggle Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _isOneTime ? "Scheduled Date" : "Select Days",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF1F4D45),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.all(3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() => _isOneTime = false),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: !_isOneTime
+                                  ? const Color(0xFF1F4D45)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              "Weekly",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: !_isOneTime
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _isOneTime = true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _isOneTime
+                                  ? const Color(0xFF1F4D45)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              "One-Time",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _isOneTime
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 12.0,
-                children: List.generate(_days.length, (index) {
-                  final isSelected = _selectedDays[index];
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedDays[index] = !_selectedDays[index];
-                      });
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+              if (_isOneTime)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today_rounded,
+                        size: 20,
+                        color: Color(0xFF1F4D45),
                       ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF1F4D45)
-                            : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Text(
-                        _days[index],
-                        style: GoogleFonts.inter(
-                          color: isSelected
-                              ? Colors.white
-                              : Colors.grey.shade800,
-                          fontWeight: FontWeight.w500,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "${_oneTimeDate.year}-${_oneTimeDate.month.toString().padLeft(2, '0')}-${_oneTimeDate.day.toString().padLeft(2, '0')}",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }),
-              ),
+                      TextButton(
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _oneTimeDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2035),
+                          );
+                          if (picked != null) {
+                            setState(() => _oneTimeDate = picked);
+                          }
+                        },
+                        child: Text(
+                          "Change",
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF1F4D45),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 12.0,
+                  children: List.generate(_days.length, (index) {
+                    final isSelected = _selectedDays[index];
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedDays[index] = !_selectedDays[index];
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF1F4D45)
+                              : Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Text(
+                          _days[index],
+                          style: GoogleFonts.inter(
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.grey.shade800,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
               const SizedBox(height: 24),
               _SectionCard(key: _morningKey, title: "Morning", emoji: "🌅"),
               const SizedBox(height: 16),

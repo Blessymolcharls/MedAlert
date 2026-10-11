@@ -12,6 +12,9 @@ class Reminder {
   DateTime? lastTakenAt;
   bool isTakenToday;
   bool isMissedToday;
+  final DateTime? oneTimeDate;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   Reminder({
     required this.id,
@@ -25,17 +28,54 @@ class Reminder {
     this.lastTakenAt,
     this.isTakenToday = false,
     this.isMissedToday = false,
+    this.oneTimeDate,
+    this.startDate,
+    this.endDate,
   });
+
+  bool get isOneTime => oneTimeDate != null;
 
   bool get isValid =>
       id.isNotEmpty &&
       name.trim().isNotEmpty &&
       dosage.trim().isNotEmpty &&
-      selectedDays.isNotEmpty &&
-      selectedDays.every((d) => d >= 0 && d <= 6);
+      (isOneTime ||
+          (selectedDays.isNotEmpty &&
+              selectedDays.every((d) => d >= 0 && d <= 6)));
+
+  bool isScheduledOnDate(DateTime date) {
+    final target = DateTime(date.year, date.month, date.day);
+    if (oneTimeDate != null) {
+      final oneTime = DateTime(
+        oneTimeDate!.year,
+        oneTimeDate!.month,
+        oneTimeDate!.day,
+      );
+      return target.isAtSameMomentAs(oneTime);
+    }
+    if (startDate != null) {
+      final start = DateTime(
+        startDate!.year,
+        startDate!.month,
+        startDate!.day,
+      );
+      if (target.isBefore(start)) return false;
+    }
+    if (endDate != null) {
+      final end = DateTime(
+        endDate!.year,
+        endDate!.month,
+        endDate!.day,
+      );
+      if (target.isAfter(end)) return false;
+    }
+    final dayIndex = date.weekday - 1; // 0=Mon, 6=Sun
+    return selectedDays.contains(dayIndex);
+  }
 
   bool isDueNow({DateTime? referenceTime}) {
     final now = referenceTime ?? DateTime.now();
+    if (!isScheduledOnDate(now)) return false;
     final reminderTime = DateTime(
       now.year,
       now.month,
@@ -49,6 +89,7 @@ class Reminder {
   bool isMissed({DateTime? referenceTime}) {
     if (isTakenToday) return false;
     final now = referenceTime ?? DateTime.now();
+    if (!isScheduledOnDate(now)) return false;
     final reminderTime = DateTime(
       now.year,
       now.month,
@@ -62,6 +103,7 @@ class Reminder {
 
   bool canConfirmNow({DateTime? referenceTime}) {
     final now = referenceTime ?? DateTime.now();
+    if (!isScheduledOnDate(now)) return false;
     final scheduled = DateTime(
       now.year,
       now.month,
@@ -94,6 +136,10 @@ class Reminder {
     DateTime? lastTakenAt,
     bool? isTakenToday,
     bool? isMissedToday,
+    DateTime? oneTimeDate,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool clearOneTimeDate = false,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -107,6 +153,9 @@ class Reminder {
       lastTakenAt: lastTakenAt ?? this.lastTakenAt,
       isTakenToday: isTakenToday ?? this.isTakenToday,
       isMissedToday: isMissedToday ?? this.isMissedToday,
+      oneTimeDate: clearOneTimeDate ? null : (oneTimeDate ?? this.oneTimeDate),
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
     );
   }
 
@@ -124,6 +173,9 @@ class Reminder {
       'lastTakenAt': lastTakenAt?.toIso8601String(),
       'isTakenToday': isTakenToday,
       'isMissedToday': isMissedToday,
+      'oneTimeDate': oneTimeDate?.toIso8601String(),
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
     };
   }
 
@@ -149,6 +201,15 @@ class Reminder {
           : null,
       isTakenToday: map['isTakenToday'] as bool? ?? false,
       isMissedToday: map['isMissedToday'] as bool? ?? false,
+      oneTimeDate: map['oneTimeDate'] != null
+          ? DateTime.tryParse(map['oneTimeDate'])
+          : null,
+      startDate: map['startDate'] != null
+          ? DateTime.tryParse(map['startDate'])
+          : null,
+      endDate: map['endDate'] != null
+          ? DateTime.tryParse(map['endDate'])
+          : null,
     );
   }
 

@@ -32,9 +32,23 @@ class ReminderProvider with ChangeNotifier {
   String _lastResetDate = "Never";
   ReminderScheduler? _scheduler;
   bool _isDisposed = false;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   List<Reminder> get reminders => List.unmodifiable(_reminders);
   String get lastResetDate => _lastResetDate;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+
+  void setError(String? message) {
+    _errorMessage = message;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
 
   ReminderProvider() {
     _loadData().then((_) {
@@ -96,6 +110,9 @@ class ReminderProvider with ChangeNotifier {
 
     // 4. Run daily reset check
     await checkDailyReset();
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> _saveReminders() async {
@@ -299,21 +316,25 @@ class ReminderProvider with ChangeNotifier {
       for (var r in _reminders) {
         for (int i = 1; i <= 7; i++) {
           final pastDate = now.subtract(Duration(days: i));
-          final weekdayIndex = pastDate.weekday - 1; // 0=Mon, 6=Sun
-          if (r.selectedDays.contains(weekdayIndex)) {
+          if (r.isScheduledOnDate(pastDate)) {
             final occ = getOccurrence(r.id, pastDate);
-            if (!occ.isTaken) {
+            if (!occ.isTaken && !occ.isSkipped) {
               occ.isExplicitlyMissed = true;
             }
           }
         }
 
         // Sync today's cached flags from today's occurrence
-        final todayOcc = getOccurrence(r.id, now);
-        r.isTakenToday = todayOcc.isTaken;
-        r.isMissedToday =
-            todayOcc.calculateStatus(r, referenceTime: now) ==
-            DoseStatus.missed;
+        if (r.isScheduledOnDate(now)) {
+          final todayOcc = getOccurrence(r.id, now);
+          r.isTakenToday = todayOcc.isTaken;
+          r.isMissedToday =
+              todayOcc.calculateStatus(r, referenceTime: now) ==
+              DoseStatus.missed;
+        } else {
+          r.isTakenToday = false;
+          r.isMissedToday = false;
+        }
       }
 
       _lastResetDate = todayStr;
@@ -326,11 +347,16 @@ class ReminderProvider with ChangeNotifier {
       // Sync memory cache
       _lastResetDate = todayStr;
       for (var r in _reminders) {
-        final todayOcc = getOccurrence(r.id, now);
-        r.isTakenToday = todayOcc.isTaken;
-        r.isMissedToday =
-            todayOcc.calculateStatus(r, referenceTime: now) ==
-            DoseStatus.missed;
+        if (r.isScheduledOnDate(now)) {
+          final todayOcc = getOccurrence(r.id, now);
+          r.isTakenToday = todayOcc.isTaken;
+          r.isMissedToday =
+              todayOcc.calculateStatus(r, referenceTime: now) ==
+              DoseStatus.missed;
+        } else {
+          r.isTakenToday = false;
+          r.isMissedToday = false;
+        }
       }
       notifyListeners();
     }
@@ -339,13 +365,13 @@ class ReminderProvider with ChangeNotifier {
   /// Checks for any scheduled doses that crossed the 15-minute missed threshold.
   void updateMissedStatuses({DateTime? referenceNow}) {
     final now = referenceNow ?? DateTime.now();
-    final todayWeekday = now.weekday - 1;
     bool changed = false;
 
     for (var r in _reminders) {
-      if (r.selectedDays.contains(todayWeekday)) {
+      if (r.isScheduledOnDate(now)) {
         final occ = getOccurrence(r.id, now);
         if (!occ.isTaken &&
+            !occ.isSkipped &&
             occ.calculateStatus(r, referenceTime: now) == DoseStatus.missed) {
           if (!r.isMissedToday) {
             r.isMissedToday = true;
@@ -365,11 +391,30 @@ class ReminderProvider with ChangeNotifier {
   // --- UI Helpers & Calendar Integration ---
 
   /// Returns all reminders scheduled for a specific calendar date, sorted chronologically.
+  ///
+  /// - Future dates and current day evaluate active reminder schedule (`isScheduledOnDate`).
+  /// - Past dates also preserve reminders if historical dose activity exists (`isTaken`, `isSkipped`, or `isExplicitlyMissed`),
+  ///   even if the recurring schedule was subsequently edited.
   List<Reminder> getRemindersForDate(DateTime date) {
-    final dayIndex = date.weekday - 1; // 0=Mon, 6=Sun
-    final list = _reminders
-        .where((r) => r.selectedDays.contains(dayIndex))
-        .toList();
+    final dateKey = DoseOccurrence.toDateKey(date);
+    final todayKey = DoseOccurrence.toDateKey(DateTime.now());
+    final isPast = dateKey.compareTo(todayKey) < 0;
+
+    final list = _reminders.where((r) {
+      if (r.isScheduledOnDate(date)) {
+        return true;
+      }
+      if (isPast) {
+        final occKey = '${r.id}_$dateKey';
+        final occ = _occurrences[occKey];
+        if (occ != null &&
+            (occ.isTaken || occ.isSkipped || occ.isExplicitlyMissed)) {
+          return true;
+        }
+      }
+      return false;
+    }).toList();
+
     list.sort((a, b) {
       if (a.time.hour != b.time.hour) {
         return a.time.hour.compareTo(b.time.hour);
@@ -420,10 +465,24 @@ class ReminderProvider with ChangeNotifier {
     }).length;
   }
 
+  int getCompletedCountForDate(DateTime date, {DateTime? referenceNow}) {
+    return getRemindersForDate(date).where((r) {
+      final s = getDoseStatus(r, date, referenceNow: referenceNow);
+      return s == DoseStatus.taken || s == DoseStatus.skipped;
+    }).length;
+  }
+
+  int getDueNowCountForDate(DateTime date, {DateTime? referenceNow}) {
+    return getRemindersForDate(date).where((r) {
+      return getDoseStatus(r, date, referenceNow: referenceNow) ==
+          DoseStatus.pending;
+    }).length;
+  }
+
   /// Calculates the day status applying the required status precedence:
   /// 1. If any dose is missed -> Red ([DayMedicationStatus.missed])
   /// 2. Else if any dose is upcoming/pending -> Yellow/Amber ([DayMedicationStatus.upcoming])
-  /// 3. Else if all scheduled doses completed (taken or skipped) -> Green ([DayMedicationStatus.completed])
+  /// 3. Else if ALL scheduled doses are completed (taken or skipped) -> Green ([DayMedicationStatus.completed])
   /// 4. If no doses scheduled -> [DayMedicationStatus.none]
   DayMedicationStatus getDayStatus(DateTime date, {DateTime? referenceNow}) {
     final list = getRemindersForDate(date);
@@ -446,7 +505,9 @@ class ReminderProvider with ChangeNotifier {
 
     if (missedCount > 0) return DayMedicationStatus.missed;
     if (upcomingOrPendingCount > 0) return DayMedicationStatus.upcoming;
-    if (completedCount > 0) return DayMedicationStatus.completed;
+    if (completedCount == list.length && completedCount > 0) {
+      return DayMedicationStatus.completed;
+    }
 
     return DayMedicationStatus.none;
   }
@@ -486,9 +547,16 @@ class ReminderProvider with ChangeNotifier {
     };
 
     for (var r in _reminders) {
-      for (var dayIndex in r.selectedDays) {
+      if (r.isOneTime && r.oneTimeDate != null) {
+        final dayIndex = r.oneTimeDate!.weekday - 1;
         if (grouped.containsKey(dayIndex)) {
           grouped[dayIndex]!.add(r);
+        }
+      } else {
+        for (var dayIndex in r.selectedDays) {
+          if (grouped.containsKey(dayIndex)) {
+            grouped[dayIndex]!.add(r);
+          }
         }
       }
     }

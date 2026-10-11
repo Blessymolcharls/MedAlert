@@ -221,4 +221,83 @@ void main() {
         id: 'med_afternoon',
         name: 'Multivitamin',
         dosage: '1 tablet',
- 
+        time: const TimeOfDay(hour: 14, minute: 0),
+        isAfterFood: true,
+        section: 'Noon',
+        selectedDays: [0], // Monday
+        createdAt: DateTime(2026, 10, 1),
+      );
+
+      provider.addReminder(rem1);
+      provider.addReminder(rem2);
+      provider.addReminder(rem3);
+
+      final testMonday = DateTime(2026, 10, 12);
+      final refTime = DateTime(2026, 10, 12, 10, 0); // 10:00 AM (past 08:00 AM window)
+
+      // Confirm intake only for rem2
+      provider.confirmIntake(rem2.id, date: testMonday);
+
+      // Individual statuses
+      expect(provider.getDoseStatus(rem1, testMonday, referenceNow: refTime), DoseStatus.missed);
+      expect(provider.getDoseStatus(rem2, testMonday, referenceNow: refTime), DoseStatus.taken);
+      expect(provider.getDoseStatus(rem3, testMonday, referenceNow: refTime), DoseStatus.upcoming);
+
+      // Precedence: ANY missed -> overall day status is missed (Red)
+      expect(provider.getDayStatus(testMonday, referenceNow: refTime), DayMedicationStatus.missed);
+
+      // Counts
+      expect(provider.getTotalCountForDate(testMonday), 3);
+      expect(provider.getTakenCountForDate(testMonday, referenceNow: refTime), 1);
+      expect(provider.getMissedCountForDate(testMonday, referenceNow: refTime), 1);
+      expect(provider.getUpcomingCountForDate(testMonday, referenceNow: refTime), 1);
+    });
+
+    test('Completed day returns DayMedicationStatus.completed when all doses taken or skipped', () {
+      final rem = Reminder(
+        id: 'med_comp',
+        name: 'Amoxicillin',
+        dosage: '250mg',
+        time: const TimeOfDay(hour: 9, minute: 0),
+        isAfterFood: true,
+        section: 'Morning',
+        selectedDays: [1], // Tuesday
+        createdAt: DateTime(2026, 10, 1),
+      );
+      provider.addReminder(rem);
+
+      final testTuesday = DateTime(2026, 10, 13);
+      final refTime = DateTime(2026, 10, 13, 9, 30);
+
+      // Initially missed if not taken past 15 min window
+      expect(provider.getDayStatus(testTuesday, referenceNow: refTime), DayMedicationStatus.missed);
+
+      // Mark taken -> Day completed
+      provider.confirmIntake(rem.id, date: testTuesday);
+      expect(provider.getDayStatus(testTuesday, referenceNow: refTime), DayMedicationStatus.completed);
+    });
+
+    test('Skipping a dose updates status and preserves skip reason', () {
+      final rem = Reminder(
+        id: 'med_skip',
+        name: 'Omeprazole',
+        dosage: '20mg',
+        time: const TimeOfDay(hour: 8, minute: 0),
+        isAfterFood: false,
+        section: 'Morning',
+        selectedDays: [2], // Wednesday
+        createdAt: DateTime(2026, 10, 1),
+      );
+      provider.addReminder(rem);
+
+      final wednesday = DateTime(2026, 10, 14);
+      provider.skipDose(rem.id, date: wednesday, reason: "Doctor advised");
+
+      expect(provider.getDoseStatus(rem, wednesday), DoseStatus.skipped);
+      expect(provider.getDoseSkipped(rem.id, wednesday), isTrue);
+      expect(provider.getDoseSkipReason(rem.id, wednesday), "Doctor advised");
+      expect(provider.getSkippedCountForDate(wednesday), 1);
+      expect(provider.getDayStatus(wednesday), DayMedicationStatus.completed);
+    });
+  });
+}

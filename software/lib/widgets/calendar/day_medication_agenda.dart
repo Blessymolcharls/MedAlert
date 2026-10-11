@@ -19,14 +19,17 @@ class DayMedicationAgenda extends StatelessWidget {
     final reminders = provider.getRemindersForDate(selectedDate);
     final total = provider.getTotalCountForDate(selectedDate);
     final taken = provider.getTakenCountForDate(selectedDate);
+    final completed = provider.getCompletedCountForDate(selectedDate);
+    final dueNow = provider.getDueNowCountForDate(selectedDate);
     final upcoming = provider.getUpcomingCountForDate(selectedDate);
     final missed = provider.getMissedCountForDate(selectedDate);
+    final skipped = provider.getSkippedCountForDate(selectedDate);
 
     if (reminders.isEmpty) {
       return EmptyScheduleState(date: selectedDate);
     }
 
-    final double progress = total > 0 ? (taken / total) : 0.0;
+    final double progress = total > 0 ? (completed / total) : 0.0;
     final int percent = (progress * 100).round();
 
     // Group reminders by section/time of day
@@ -74,14 +77,19 @@ class DayMedicationAgenda extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '$taken of $total doses completed',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : const Color(0xFF1F4D45),
+                  Expanded(
+                    child: Text(
+                      '$completed of $total doses completed',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF1F4D45),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '$percent%',
                     style: GoogleFonts.inter(
@@ -108,27 +116,39 @@ class DayMedicationAgenda extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               // Status summary chips
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   _buildStatusPill(
                     '$taken Taken',
                     Colors.green.shade50,
                     Colors.green.shade800,
                   ),
-                  const SizedBox(width: 8),
-                  _buildStatusPill(
-                    '$upcoming Upcoming',
-                    Colors.orange.shade50,
-                    Colors.orange.shade900,
-                  ),
-                  if (missed > 0) ...[
-                    const SizedBox(width: 8),
+                  if (dueNow > 0)
+                    _buildStatusPill(
+                      '$dueNow Due Now',
+                      Colors.amber.shade100,
+                      Colors.amber.shade900,
+                    ),
+                  if ((upcoming - dueNow) > 0)
+                    _buildStatusPill(
+                      '${upcoming - dueNow} Upcoming',
+                      Colors.orange.shade50,
+                      Colors.orange.shade900,
+                    ),
+                  if (missed > 0)
                     _buildStatusPill(
                       '$missed Missed',
                       Colors.red.shade50,
                       Colors.red.shade800,
                     ),
-                  ],
+                  if (skipped > 0)
+                    _buildStatusPill(
+                      '$skipped Skipped',
+                      Colors.grey.shade200,
+                      Colors.grey.shade800,
+                    ),
                 ],
               ),
             ],

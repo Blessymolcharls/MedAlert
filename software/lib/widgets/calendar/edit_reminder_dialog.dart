@@ -20,6 +20,8 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
   late TimeOfDay _selectedTime;
   late bool _isAfterFood;
   late List<bool> _selectedDays;
+  late bool _isOneTime;
+  late DateTime _oneTimeDate;
 
   @override
   void initState() {
@@ -28,6 +30,8 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
     _dosageController = TextEditingController(text: widget.reminder.dosage);
     _selectedTime = widget.reminder.time;
     _isAfterFood = widget.reminder.isAfterFood;
+    _isOneTime = widget.reminder.isOneTime;
+    _oneTimeDate = widget.reminder.oneTimeDate ?? DateTime.now();
     _selectedDays = List.generate(
       7,
       (i) => widget.reminder.selectedDays.contains(i),
@@ -70,7 +74,7 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
       if (_selectedDays[i]) activeDayIndices.add(i);
     }
 
-    if (activeDayIndices.isEmpty) {
+    if (!_isOneTime && activeDayIndices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select at least one day'),
@@ -94,7 +98,11 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
       time: _selectedTime,
       isAfterFood: _isAfterFood,
       section: section,
-      selectedDays: activeDayIndices,
+      selectedDays: _isOneTime
+          ? [(_oneTimeDate.weekday - 1) % 7]
+          : activeDayIndices,
+      oneTimeDate: _isOneTime ? _oneTimeDate : null,
+      clearOneTimeDate: !_isOneTime,
     );
 
     Provider.of<ReminderProvider>(
@@ -210,42 +218,136 @@ class _EditReminderDialogState extends State<EditReminderDialog> {
             ),
             const Divider(height: 20),
 
-            // Weekday Chips
-            Text(
-              'Repeat On',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : const Color(0xFF1F4D45),
-              ),
+            // Schedule Type Selector
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _isOneTime ? 'Scheduled Date' : 'Repeat On',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1F4D45),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(() => _isOneTime = false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: !_isOneTime
+                                ? const Color(0xFF1F4D45)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            'Weekly',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: !_isOneTime ? Colors.white : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _isOneTime = true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _isOneTime
+                                ? const Color(0xFF1F4D45)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            'One-Time',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: _isOneTime ? Colors.white : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: List.generate(7, (i) {
-                final isSelected = _selectedDays[i];
-                final dayLabel = CalendarUtils.shortWeekdayNames[i];
 
-                return FilterChip(
-                  label: Text(dayLabel),
-                  selected: isSelected,
-                  selectedColor: const Color(0xFF1F4D45),
-                  labelStyle: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.white : Colors.black87,
+            if (_isOneTime)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.calendar_today_rounded,
+                  color: Color(0xFF1F4D45),
+                ),
+                title: Text(
+                  CalendarUtils.formatFullDateWithYear(_oneTimeDate),
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  showCheckmark: false,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  onSelected: (val) {
-                    setState(() => _selectedDays[i] = val);
+                ),
+                trailing: TextButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _oneTimeDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) {
+                      setState(() => _oneTimeDate = picked);
+                    }
                   },
-                );
-              }),
-            ),
+                  child: const Text('Change Date'),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: List.generate(7, (i) {
+                  final isSelected = _selectedDays[i];
+                  final dayLabel = CalendarUtils.shortWeekdayNames[i];
+
+                  return FilterChip(
+                    label: Text(dayLabel),
+                    selected: isSelected,
+                    selectedColor: const Color(0xFF1F4D45),
+                    labelStyle: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : Colors.black87,
+                    ),
+                    showCheckmark: false,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    onSelected: (val) {
+                      setState(() => _selectedDays[i] = val);
+                    },
+                  );
+                }),
+              ),
           ],
         ),
       ),

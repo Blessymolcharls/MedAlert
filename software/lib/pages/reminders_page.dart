@@ -137,11 +137,28 @@ class _RemindersPageState extends State<RemindersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<ReminderProvider>(context);
+
+    if (provider.isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1F4D45)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final bottomPadding = MediaQuery.of(context).padding.bottom + 48.0;
+
     return Scaffold(
       backgroundColor: Colors.transparent, // Inherited from MainShell
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+          padding: EdgeInsets.fromLTRB(16.0, 12.0, 16.0, bottomPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -156,16 +173,59 @@ class _RemindersPageState extends State<RemindersPage> {
                 isCurrentPeriod: _isCurrentPeriod(),
               ),
               const SizedBox(height: 16),
-
-              // Active View Body
-              if (_currentView == CalendarViewType.month)
-                _buildMonthView(context)
-              else if (_currentView == CalendarViewType.week)
-                _buildWeekView(context)
-              else
-                DayMedicationAgenda(selectedDate: _selectedDate),
-
-              const SizedBox(height: 32),
+              if (provider.errorMessage != null) ...[
+                Container(
+                  key: const Key('calendar_error_banner'),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEBEE),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEF5350)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Color(0xFFD32F2F)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          provider.errorMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFC62828),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('calendar_error_dismiss'),
+                        icon: const Icon(Icons.close, size: 18, color: Color(0xFFC62828)),
+                        onPressed: provider.clearError,
+                        tooltip: 'Dismiss error',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey(_currentView),
+                  child: _currentView == CalendarViewType.month
+                      ? _buildMonthView(context)
+                      : (_currentView == CalendarViewType.week
+                          ? _buildWeekView(context)
+                          : DayMedicationAgenda(selectedDate: _selectedDate)),
+                ),
+              ),
             ],
           ),
         ),

@@ -48,32 +48,41 @@ class EmptyScheduleState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              key: const Key('empty_state_add_button'),
-              icon: const Icon(Icons.add, size: 18),
-              label: Text(
-                'Add Reminder',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1F4D45),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AddReminderPage(),
+            Semantics(
+              button: true,
+              label: 'Add a new medication reminder',
+              child: ElevatedButton.icon(
+                key: const Key('empty_state_add_button'),
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: Text(
+                  'Add Reminder',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
-                );
-              },
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1F4D45),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(180, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  elevation: 2,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddReminderPage(initialDate: date),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),

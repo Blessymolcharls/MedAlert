@@ -115,6 +115,67 @@ class NotificationService {
   }
 
   Future<void> scheduleWeeklyNotification(Reminder reminder) async {
+    if (reminder.isOneTime && reminder.oneTimeDate != null) {
+      final oneTime = reminder.oneTimeDate!;
+      final tz.TZDateTime scheduledTime = tz.TZDateTime(
+        tz.local,
+        oneTime.year,
+        oneTime.month,
+        oneTime.day,
+        reminder.time.hour,
+        reminder.time.minute,
+      );
+      final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+      if (scheduledTime.isBefore(now)) return; // Past date, do not schedule
+
+      final int notifId = _generateNotificationId(reminder.id, 0);
+      final String foodText = reminder.isAfterFood
+          ? "After Food"
+          : "Before Food";
+      final formattedTimeStr = _formatTimeOfDay(reminder.time);
+
+      const title = "Upcoming Medicine Reminder";
+      final body = "${reminder.name} at $formattedTimeStr ($foodText)";
+
+      const notificationDetails = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'medalert_high_channel',
+          'MedAlert Reminders',
+          channelDescription: 'High priority medicine intake reminders',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      );
+
+      try {
+        await _plugin.zonedSchedule(
+          notifId,
+          title,
+          body,
+          scheduledTime,
+          notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      } catch (e) {
+        try {
+          await _plugin.zonedSchedule(
+            notifId,
+            title,
+            body,
+            scheduledTime,
+            notificationDetails,
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+          );
+        } catch (_) {}
+      }
+      return;
+    }
+
     for (int dayIndex in reminder.selectedDays) {
       final int flutterWeekdayMatch = dayIndex + 1;
 
@@ -213,13 +274,29 @@ class NotificationService {
   }
 
   Future<void> cancelReminderNotifications(Reminder reminder) async {
+    if (reminder.isOneTime) {
+      try {
+        await _plugin.cancel(_generateNotificationId(reminder.id, 0));
+      } catch (e) {
+        debugPrint('NotificationService: cancel error: $e');
+      }
+      return;
+    }
     for (int dayIndex in reminder.selectedDays) {
-      await _plugin.cancel(_generateNotificationId(reminder.id, dayIndex));
+      try {
+        await _plugin.cancel(_generateNotificationId(reminder.id, dayIndex));
+      } catch (e) {
+        debugPrint('NotificationService: cancel error: $e');
+      }
     }
   }
 
   Future<void> cancelAll() async {
-    await _plugin.cancelAll();
+    try {
+      await _plugin.cancelAll();
+    } catch (e) {
+      debugPrint('NotificationService: cancelAll error: $e');
+    }
   }
 
   // Legacy stubs to avoid breaking other files

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/reminder.dart';
 import '../../models/dose_occurrence.dart';
 import '../../providers/reminder_provider.dart';
+import '../../providers/ble_provider.dart';
 import '../confirm_dialog.dart';
 import 'medication_details_dialog.dart';
 import 'edit_reminder_dialog.dart';
@@ -74,13 +75,33 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
   }
 
   void _confirmTakeNow() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final cardDay = DateTime(
+      widget.occurrenceDate.year,
+      widget.occurrenceDate.month,
+      widget.occurrenceDate.day,
+    );
+
+    // Prevent future dates from being marked as taken accidentally
+    if (cardDay.isAfter(today)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cannot mark future doses as taken in advance."),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final provider = Provider.of<ReminderProvider>(context, listen: false);
     final status = provider.getDoseStatus(
       widget.reminder,
       widget.occurrenceDate,
     );
 
-    // If upcoming, require deliberate confirmation to avoid accidental intake
+    // If upcoming later today, require deliberate confirmation to avoid accidental early intake
     if (status == DoseStatus.upcoming) {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -95,7 +116,7 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
               style: GoogleFonts.inter(fontWeight: FontWeight.bold),
             ),
             content: Text(
-              "This dose is scheduled for ${widget.reminder.time.format(ctx)}. Are you sure you want to mark it as taken now?",
+              "This dose is scheduled for ${widget.reminder.time.format(ctx)}. Are you sure you want to mark it as taken early?",
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
@@ -126,6 +147,44 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
         builder: (context) => const ConfirmDialog(),
       );
       if (confirmed != true) return;
+    } else if (status == DoseStatus.missed) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text(
+              'Confirm Late Intake',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+            content: Text(
+              "Are you taking your scheduled dose of ${widget.reminder.name} now?",
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancel', style: GoogleFonts.inter()),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1F4D45),
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('Confirm', style: GoogleFonts.inter()),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
     }
 
     if (mounted) {
@@ -133,9 +192,72 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
         widget.reminder.id,
         date: widget.occurrenceDate,
       );
+
+      // Stop physical alert on connected MedAlert box if applicable
+      try {
+        final ble = Provider.of<BleProvider>(context, listen: false);
+        if (ble.isConnected) {
+          ble.stopAlert();
+        }
+      } catch (_) {}
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Marked ${widget.reminder.name} as taken!"),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _unmarkTaken() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Unmark Dose',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            "Reset dose status of '${widget.reminder.name}' back to untaken?",
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1F4D45),
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Unmark', style: GoogleFonts.inter()),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      Provider.of<ReminderProvider>(
+        context,
+        listen: false,
+      ).unmarkDose(widget.reminder.id, date: widget.occurrenceDate);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Reset dose for ${widget.reminder.name}"),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -166,19 +288,27 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
   }
 
   void _showDetails() {
+    final provider = Provider.of<ReminderProvider>(context, listen: false);
     showDialog(
       context: context,
-      builder: (ctx) => MedicationDetailsDialog(
-        reminder: widget.reminder,
-        occurrenceDate: widget.occurrenceDate,
+      builder: (ctx) => ChangeNotifierProvider.value(
+        value: provider,
+        child: MedicationDetailsDialog(
+          reminder: widget.reminder,
+          occurrenceDate: widget.occurrenceDate,
+        ),
       ),
     );
   }
 
   void _showEdit() {
+    final provider = Provider.of<ReminderProvider>(context, listen: false);
     showDialog(
       context: context,
-      builder: (ctx) => EditReminderDialog(reminder: widget.reminder),
+      builder: (ctx) => ChangeNotifierProvider.value(
+        value: provider,
+        child: EditReminderDialog(reminder: widget.reminder),
+      ),
     );
   }
 
@@ -290,8 +420,8 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
     switch (status) {
       case DoseStatus.taken:
         leftAccent = const Color(0xFF2E7D32);
-        statusBadgeBg = Colors.green.withValues(alpha: 0.2);
-        statusTextColor = Colors.green.shade800;
+        statusBadgeBg = Colors.green.withValues(alpha: 0.18);
+        statusTextColor = const Color(0xFF1B5E20);
         break;
       case DoseStatus.missed:
         leftAccent = const Color(0xFFD32F2F);
@@ -299,24 +429,24 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
             ? Colors.red.withValues(alpha: 0.1)
             : const Color(0xFFFFEBEE);
         borderColor = isDark ? Colors.red.shade900 : const Color(0xFFFFCDD2);
-        statusBadgeBg = Colors.red.withValues(alpha: 0.2);
-        statusTextColor = Colors.red.shade800;
+        statusBadgeBg = Colors.red.withValues(alpha: 0.18);
+        statusTextColor = const Color(0xFFB71C1C);
         break;
       case DoseStatus.pending:
         leftAccent = const Color(0xFFF57F17);
         statusLabel = "Due Now";
-        statusBadgeBg = Colors.orange.withValues(alpha: 0.25);
-        statusTextColor = Colors.orange.shade900;
+        statusBadgeBg = Colors.orange.withValues(alpha: 0.22);
+        statusTextColor = const Color(0xFFE65100);
         break;
       case DoseStatus.upcoming:
         leftAccent = const Color(0xFF1F4D45);
-        statusBadgeBg = Colors.blue.withValues(alpha: 0.12);
-        statusTextColor = Colors.blue.shade900;
+        statusBadgeBg = Colors.blue.withValues(alpha: 0.14);
+        statusTextColor = const Color(0xFF0D47A1);
         break;
       case DoseStatus.skipped:
-        leftAccent = Colors.grey.shade500;
+        leftAccent = Colors.grey.shade600;
         statusBadgeBg = Colors.grey.withValues(alpha: 0.2);
-        statusTextColor = Colors.grey.shade800;
+        statusTextColor = const Color(0xFF212121);
         break;
     }
 
@@ -324,109 +454,130 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
         ? TimeOfDay.fromDateTime(takenAt).format(context)
         : null;
 
+    final cardSemanticLabel =
+        '${widget.reminder.name}, ${widget.reminder.dosage}, scheduled for ${widget.reminder.time.format(context)}, status: $statusLabel';
+
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: status == DoseStatus.pending ? _pulseAnimation.value : 1.0,
-          child: Container(
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor, width: 1),
-              boxShadow: [
-                if (!isDark)
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Left status accent line
-                    Container(width: 5, color: leftAccent),
+          child: Semantics(
+            container: true,
+            label: cardSemanticLabel,
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor, width: 1),
+                boxShadow: [
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Left status accent line
+                      Container(width: 5, color: leftAccent),
 
-                    // Main card body
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Top Row: Medicine Name, Scheduled Time, Menu
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                      // Main card body with tap to view details
+                      Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _showDetails,
+                            borderRadius: const BorderRadius.horizontal(
+                              right: Radius.circular(16),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Top Row: Medicine Name, Scheduled Time, Menu
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              widget.reminder.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : const Color(0xFF1F4D45),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              widget.reminder.dosage,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                                color: isDark
+                                                    ? Colors.grey.shade400
+                                                    : Colors.grey.shade700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+
+                                      // Scheduled Time
                                       Text(
-                                        widget.reminder.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                        widget.reminder.time.format(context),
                                         style: GoogleFonts.inter(
-                                          fontSize: 16,
+                                          fontSize: 14,
                                           fontWeight: FontWeight.bold,
                                           color: isDark
-                                              ? Colors.white
+                                              ? Colors.white70
                                               : const Color(0xFF1F4D45),
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        widget.reminder.dosage,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: isDark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
 
-                                // Scheduled Time
-                                Text(
-                                  widget.reminder.time.format(context),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : const Color(0xFF1F4D45),
-                                  ),
-                                ),
-
-                                // Actions Popup Menu
-                                PopupMenuButton<String>(
-                                  icon: Icon(
-                                    Icons.more_vert,
-                                    size: 20,
-                                    color: isDark
-                                        ? Colors.grey.shade400
-                                        : Colors.grey.shade600,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  splashRadius: 18,
-                                  onSelected: (val) {
-                                    if (val == 'details') _showDetails();
-                                    if (val == 'edit') _showEdit();
-                                    if (val == 'skip') _skipDose();
-                                    if (val == 'delete') _showDelete();
-                                  },
-                                  itemBuilder: (ctx) => [
+                                      // Actions Popup Menu
+                                      Semantics(
+                                        button: true,
+                                        label: 'Medication options',
+                                        child: PopupMenuButton<String>(
+                                          icon: Icon(
+                                            Icons.more_vert,
+                                            size: 20,
+                                            color: isDark
+                                                ? Colors.grey.shade400
+                                                : Colors.grey.shade600,
+                                          ),
+                                          padding: const EdgeInsets.all(4),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 44,
+                                            minHeight: 44,
+                                          ),
+                                          splashRadius: 20,
+                                          tooltip: 'Medication options',
+                                          onSelected: (val) {
+                                            if (val == 'details') _showDetails();
+                                            if (val == 'edit') _showEdit();
+                                            if (val == 'unmark') _unmarkTaken();
+                                            if (val == 'skip') _skipDose();
+                                            if (val == 'delete') _showDelete();
+                                          },
+                                          itemBuilder: (ctx) => [
                                     const PopupMenuItem(
                                       value: 'details',
                                       child: Row(
@@ -455,6 +606,21 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
                                         ],
                                       ),
                                     ),
+                                    if (status == DoseStatus.taken)
+                                      const PopupMenuItem(
+                                        value: 'unmark',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.undo_rounded,
+                                              size: 18,
+                                              color: Color(0xFF1F4D45),
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text('Unmark as Taken'),
+                                          ],
+                                        ),
+                                      ),
                                     if (status != DoseStatus.taken &&
                                         status != DoseStatus.skipped)
                                       const PopupMenuItem(
@@ -492,8 +658,9 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
+                          ),
                             const SizedBox(height: 10),
 
                             // Badges & Action Buttons Wrap
@@ -570,8 +737,51 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
                                     ),
                                   ),
 
-                                // Action: Confirm Intake Button
-                                if (status == DoseStatus.pending ||
+                                // Action: Future Day indicator vs. Confirm Intake Button
+                                if (DateTime(
+                                  widget.occurrenceDate.year,
+                                  widget.occurrenceDate.month,
+                                  widget.occurrenceDate.day,
+                                ).isAfter(
+                                  DateTime(
+                                    DateTime.now().year,
+                                    DateTime.now().month,
+                                    DateTime.now().day,
+                                  ),
+                                ))
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: Colors.blue.withValues(alpha: 0.2),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.schedule_rounded,
+                                          size: 13,
+                                          color: Colors.blue.shade800,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "Scheduled",
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue.shade900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else if (status == DoseStatus.pending ||
                                     status == DoseStatus.upcoming ||
                                     status == DoseStatus.missed)
                                   ElevatedButton.icon(
@@ -600,19 +810,31 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
                                                   : const Color(0xFF1F4D45)),
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
+                                        horizontal: 14,
+                                        vertical: 8,
                                       ),
-                                      minimumSize: Size.zero,
+                                      minimumSize: const Size(0, 38),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
                                       ),
+                                      elevation: 1,
                                     ),
                                   ),
 
-                                // Action: Skip Button
-                                if (status == DoseStatus.pending ||
-                                    status == DoseStatus.upcoming)
+                                // Action: Skip Button (Today and earlier only)
+                                if (!DateTime(
+                                      widget.occurrenceDate.year,
+                                      widget.occurrenceDate.month,
+                                      widget.occurrenceDate.day,
+                                    ).isAfter(
+                                      DateTime(
+                                        DateTime.now().year,
+                                        DateTime.now().month,
+                                        DateTime.now().day,
+                                      ),
+                                    ) &&
+                                    (status == DoseStatus.pending ||
+                                        status == DoseStatus.upcoming))
                                   OutlinedButton(
                                     onPressed: _skipDose,
                                     style: OutlinedButton.styleFrom(
@@ -621,10 +843,10 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
                                         color: Colors.grey.shade400,
                                       ),
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
+                                        horizontal: 12,
+                                        vertical: 8,
                                       ),
-                                      minimumSize: Size.zero,
+                                      minimumSize: const Size(0, 38),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
                                       ),
@@ -643,13 +865,16 @@ class _MedicationTimelineCardState extends State<MedicationTimelineCard>
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        );
-      },
-    );
+        ),
+      ),
+    ),
+  );
+},
+);
   }
 }

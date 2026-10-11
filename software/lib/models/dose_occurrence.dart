@@ -12,7 +12,7 @@ enum DoseStatus {
       case DoseStatus.upcoming:
         return 'Upcoming';
       case DoseStatus.pending:
-        return 'Pending';
+        return 'Due Now';
       case DoseStatus.taken:
         return 'Taken';
       case DoseStatus.missed:
