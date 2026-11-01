@@ -214,9 +214,15 @@ void main() {
       provider.confirmIntake('r_rec', date: monday);
 
       expect(provider.getDoseStatus(dailyMed, monday), DoseStatus.taken);
-      // Tuesday and Wednesday MUST still be upcoming!
-      expect(provider.getDoseStatus(dailyMed, tuesday), DoseStatus.upcoming);
-      expect(provider.getDoseStatus(dailyMed, wednesday), DoseStatus.upcoming);
+      // Tuesday and Wednesday MUST still be upcoming relative to Monday
+      expect(
+        provider.getDoseStatus(dailyMed, tuesday, referenceNow: monday),
+        DoseStatus.upcoming,
+      );
+      expect(
+        provider.getDoseStatus(dailyMed, wednesday, referenceNow: monday),
+        DoseStatus.upcoming,
+      );
 
       expect(provider.getTakenCountForDate(monday), 1);
       expect(provider.getTakenCountForDate(tuesday), 0);

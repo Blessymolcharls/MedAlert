@@ -14,11 +14,13 @@ import '../widgets/calendar/empty_schedule_state.dart';
 class RemindersPage extends StatefulWidget {
   final CalendarViewType initialView;
   final DateTime? initialDate;
+  final DateTime Function()? nowProvider;
 
   const RemindersPage({
     super.key,
     this.initialView = CalendarViewType.month,
     this.initialDate,
+    this.nowProvider,
   });
 
   @override
@@ -30,11 +32,13 @@ class _RemindersPageState extends State<RemindersPage> {
   late DateTime _selectedDate;
   late DateTime _displayMonth;
 
+  DateTime get _now => widget.nowProvider?.call() ?? DateTime.now();
+
   @override
   void initState() {
     super.initState();
     _currentView = widget.initialView;
-    final now = widget.initialDate ?? DateTime.now();
+    final now = widget.initialDate ?? _now;
     _selectedDate = DateTime(now.year, now.month, now.day);
     _displayMonth = DateTime(now.year, now.month, 1);
   }
@@ -102,7 +106,7 @@ class _RemindersPageState extends State<RemindersPage> {
   }
 
   void _onToday() {
-    final now = DateTime.now();
+    final now = _now;
     setState(() {
       _selectedDate = DateTime(now.year, now.month, now.day);
       _displayMonth = DateTime(now.year, now.month, 1);
@@ -121,7 +125,7 @@ class _RemindersPageState extends State<RemindersPage> {
   }
 
   bool _isCurrentPeriod() {
-    final now = DateTime.now();
+    final now = _now;
     switch (_currentView) {
       case CalendarViewType.month:
         return _displayMonth.year == now.year &&

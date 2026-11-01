@@ -38,6 +38,7 @@ void main() {
             child: RemindersPage(
               initialView: initialView,
               initialDate: DateTime(2026, 10, 12), // Monday
+              nowProvider: () => DateTime(2026, 10, 12, 8, 0),
             ),
           ),
         ),
